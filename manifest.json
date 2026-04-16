@@ -1,0 +1,75 @@
+{
+  "manifest_version": "0.4",
+  "name": "capital-mcp",
+  "display_name": "Capital.com Public API MCP Server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Capital.com Open API — enabling safe, LLM-driven trading operations.",
+  "long_description": "A Python MCP server built with FastMCP 3.x that integrates with the Capital.com Open API. Provides tools for market data, account management, position tracking, and order execution via natural language. Uses STDIO transport and supports both demo and live trading environments.\n\nThis server requires valid Capital.com credentials. Always test with the demo environment before using in live trading.",
+  "author": {
+    "name": "Capital MCP Team",
+    "url": "https://capital.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capital-com-sv/capital-mcp"
+  },
+  "documentation": "https://github.com/capital-com-sv/capital-mcp/blob/main/USAGE.md",
+  "support": "https://github.com/capital-com-sv/capital-mcp/issues",
+  "license": "MIT",
+  "keywords": ["trading", "capital.com", "mcp", "finance", "markets", "api"],
+  "privacy_policies": [
+    "https://capital.com/privacy-policy"
+  ],
+  "server": {
+    "type": "uv",
+    "entry_point": "capital_mcp/server.py",
+    "mcp_config": {
+      "env": {
+        "CAP_ENV": "${user_config.env}",
+        "CAP_API_KEY": "${user_config.api_key}",
+        "CAP_IDENTIFIER": "${user_config.identifier}",
+        "CAP_API_PASSWORD": "${user_config.password}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "env": {
+      "type": "string",
+      "title": "Environment",
+      "description": "Trading environment: 'demo' for paper trading, 'live' for real money. Default: demo.",
+      "enum": ["demo", "live"],
+      "default": "demo",
+      "sensitive": false,
+      "required": false
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Your Capital.com API key. Generate at: Settings > API integrations > Generate new key. Required before using any tools.",
+      "sensitive": true,
+      "required": true
+    },
+    "identifier": {
+      "type": "string",
+      "title": "Email (Identifier)",
+      "description": "Your Capital.com account email address used to log in.",
+      "sensitive": false,
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "API Password",
+      "description": "Your Capital.com API key custom password (not your platform login password).",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}
