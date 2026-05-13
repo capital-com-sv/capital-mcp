@@ -65,7 +65,7 @@ def format_iso_datetime(dt: Any | None) -> str | None:
         from datetime import datetime
 
         if isinstance(dt, datetime):
-            return dt.isoformat() + "Z"
+            return dt.isoformat().replace("+00:00", "Z") if dt.tzinfo else dt.isoformat() + "Z"
     except Exception:
         pass
     return str(dt)

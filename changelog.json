@@ -1,0 +1,336 @@
+{
+    "RELEASE_TAG": [
+        {
+            "commit": "4b2232fb",
+            "tittle": "Fix critical bug: FunctionTool not callable in position execution",
+            "message": "Fix critical bug: FunctionTool not callable in position execution\n\nPROBLEM:\n- cap_trade_execute_position was failing with error: 'FunctionTool' object is not callable\n- When wait_for_confirm=true, code tried to call cap_trade_confirm_wait() directly\n- In FastMCP, @mcp.tool() decorated functions cannot call each other directly\n\nSOLUTION:\n- Extract confirmation logic into helper function _wait_for_confirmation()\n- Both cap_trade_confirm_wait tool and execute functions now use the helper\n- Fixes position opening errors discovered in production testing\n\nADDITIONAL CHANGES:\n- Add unofficial disclaimer to README (not affiliated with Capital.com)\n- Add log file locations for troubleshooting (macOS/Linux/Windows)\n- Update .gitignore to exclude working/temporary files\n\nTESTING:\n- Log analysis showed 2 failed execute attempts on 2026-01-12\n- Fix tested with Capital.com Demo API\n- All trade execution tools now working correctly\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T07:12:32.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "1761205a",
+            "tittle": "Add MCP Prompts: 4 workflow templates for guided trading operations",
+            "message": "Add MCP Prompts: 4 workflow templates for guided trading operations\n\nImplemented all 4 workflow prompts from Phase 6:\n\n1. market_scan - Market analysis workflow\n   - Scans watchlist for trading opportunities\n   - Parameters: watchlist_id, timeframe, lookback_periods\n   - Guides through fetching data, technical analysis, sentiment checks\n\n2. trade_proposal - Trade planning workflow\n   - Creates trade proposals with risk management\n   - Parameters: epic (required), direction, thesis, risk_percent\n   - Calculates position size, stop loss, take profit\n   - Returns preview_id for execution (NO execution)\n\n3. execute_trade - Trade execution workflow\n   - Executes previewed trades safely\n   - Parameters: preview_id (required)\n   - Verifies preview validity, executes with broker, polls confirmation\n   - DANGER: Places real trades\n\n4. position_review - Portfolio analysis workflow\n   - Analyzes open positions and working orders\n   - No parameters (reviews all positions)\n   - Calculates P&L, risk exposure, suggests adjustments\n   - Read-only, no execution\n\nFeatures:\n- All prompts return structured guidance as MCP messages\n- Step-by-step instructions for each workflow\n- Safety notes and pre-execution checklists\n- Error handling with helpful messages\n- Natural language invocation in Claude Desktop\n\nDocumentation:\n- Added comprehensive prompts section to README.md\n- Updated IMPLEMENTATION_SUMMARY.md (Phase 6: 100% complete)\n- Overall project completion: 70% \u2192 75%\n- Added test_prompts.py for verification\n\nTesting:\n- All 4 prompts registered successfully\n- Verified with FastMCP.get_prompts() API\n- Prompts appear in MCP client interfaces\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T07:37:16.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "2aaada72",
+            "tittle": "Update .gitignore: exclude BUG_FIX_SUMMARY.md",
+            "message": "Update .gitignore: exclude BUG_FIX_SUMMARY.md\n\n- Added BUG_FIX_SUMMARY.md to gitignore\n- This file documents internal bug fixes and won't be published\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T07:37:25.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "842feba8",
+            "tittle": "Update README: reflect prompts completion in status section",
+            "message": "Update README: reflect prompts completion in status section\n\n- Changed overall completion from 'Phases 1-4' to '75% Complete (Phases 1-6)'\n- Added MCP Prompts section to completed features (4 workflow templates)\n- Reorganized pending work: Phase 5 (Resources) and Phase 7 (Testing)\n- Updated tools section title: 'Planned - 50+ tools' \u2192 '36 implemented'\n- Clarified that prompts are now implemented, not pending\n\nThis aligns README.md with IMPLEMENTATION_SUMMARY.md showing accurate project status.\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T21:14:45.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "44e20752",
+            "tittle": "Add MCP Resources: 5 read-only data resources (Phase 5 complete)",
+            "message": "Add MCP Resources: 5 read-only data resources (Phase 5 complete)\n\nImplement Phase 5 - MCP Resources providing read-only access to server\nstate and configuration through URI-based resources.\n\nResources implemented:\n- cap://status - Server and session status\n- cap://risk-policy - Risk management configuration\n- cap://allowed-epics - Trading allowlist\n- cap://watchlists - All watchlists with markets\n- cap://market-cache/{epic} - Market details (dynamic resource)\n\nImplementation details:\n- Added 5 resource functions to capital_mcp/server.py (+241 lines)\n- Resources use @mcp.resource() decorator from FastMCP\n- 4 static resources + 1 dynamic resource with {epic} parameter\n- All return JSON data (application/json)\n- Authentication required for watchlists and market-cache\n- Watchlists resource makes N+1 API calls (rate limit note added)\n\nTesting:\n- Created test_resources.py verification script (+75 lines)\n- Tests both static resources and dynamic templates\n- Verified all 5 resources registered successfully\n\nDocumentation:\n- Added comprehensive MCP Resources section to README.md (+230 lines)\n- Included examples, use cases, authentication requirements\n- Updated implementation status: 75% \u2192 80% complete\n- Updated IMPLEMENTATION_SUMMARY.md Phase 5: 0% \u2192 100%\n- Updated .gitignore to exclude PHASE5_PLAN.md\n\nProgress:\n- Overall completion: 75% \u2192 80%\n- Phase 5 (MCP Resources): 100% complete\n- Phases 1-6: All complete\n- Phase 7 (Testing & WebSocket): Remaining\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T21:51:44.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "007735c9",
+            "tittle": "Add testing infrastructure: pytest suite with 13 passing tests",
+            "message": "Add testing infrastructure: pytest suite with 13 passing tests\n\nImplemented Phase 7 testing (partial - registration & validation tests only).\nDeferred unit/integration tests due to tight coupling with dependency injection.\n\nChanges:\n- Add pytest infrastructure (pytest.ini, conftest.py, __init__.py)\n- Add pytest-mock to dev dependencies\n- Implement 3 test files with 13 tests (all passing):\n  * test_basic.py: Import validation, error definitions, MCP server instance\n  * test_mcp_registration.py: Validate 33 tools, 5 resources, 4 prompts registered\n  * test_prompts.py: Validate prompt schemas and arguments\n- Update README.md:\n  * Change overall completion 80% \u2192 85%\n  * Add \"Testing (Phase 7 - Partial)\" section showing what's implemented\n  * Update \"Run Tests\" section with pytest commands and current coverage\n- Update .gitignore: Add PHASE7_TESTING_PLAN.md exclusion\n\nWhy simplified tests:\n- Core components (config, session, risk, client) use dependency injection\n  without constructor parameters, making traditional unit tests impractical\n- Tool functions are wrapped in @mcp.tool() decorator (FunctionTool objects),\n  cannot be called directly from tests\n- Integration tests would require complex mocking of entire dependency graph\n- Current approach validates MCP server registration and schemas instead\n\nTest results:\n- 13/13 tests passing\n- Validates all MCP primitives are correctly registered\n- Confirms server can be imported and instantiated\n- Verifies prompt schemas match expectations\n\nRemaining work:\n- Unit tests for core components (requires refactoring for testability)\n- Integration tests with mocked API responses (requires dependency injection refactor)\n- WebSocket support (optional)\n- 2 missing tools (update position/order)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T22:18:45.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "1dff32ba",
+            "tittle": "Remove cap://watchlists resource to prevent unwanted watchlist creation",
+            "message": "Remove cap://watchlists resource to prevent unwanted watchlist creation\n\nThe cap://watchlists resource was causing Claude Desktop to proactively\ncreate watchlists when users opened the app, which was unexpected behavior.\n\nChanges:\n- Removed cap_watchlists_resource() from server.py (59 lines)\n- Updated test to expect 4 resources instead of 5\n- Updated README.md to document 4 resources (was 5)\n- Removed watchlists resource documentation section\n- Updated usage example to use cap_watchlists_list tool instead\n\nAll watchlist functionality remains available via tools:\n- cap_watchlists_list - List all watchlists\n- cap_watchlists_get - Get specific watchlist\n- cap_watchlists_create - Create new watchlist\n- cap_watchlists_delete - Delete watchlist\n- cap_watchlists_add_market - Add market to watchlist\n- cap_watchlists_remove_market - Remove market from watchlist\n\nTests: 13/13 passing\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-16T22:31:53.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "e7770071",
+            "tittle": "Add WebSocket streaming support with 3 tools and 3 prompts",
+            "message": "Add WebSocket streaming support with 3 tools and 3 prompts\n\nImplemented real-time market data streaming via Capital.com WebSocket API\nwith instant price alerts, portfolio monitoring, and configurable streams.\n\n## New Infrastructure\n\n**WebSocket Client (capital_mcp/websocket_client.py - 298 lines)**\n- WebSocketClient class with async context manager\n- Connects to wss://api-streaming-capital.backend-capital.com/connect\n- Authentication via session tokens\n- Subscribe/unsubscribe to up to 40 markets\n- Auto-reconnect on disconnect (3 retries, exponential backoff)\n- Ping/pong keepalive every 5 minutes\n- Message parsing for price ticks\n- 5-minute default stream duration\n\n**New Models (capital_mcp/models.py)**\n- PriceTick: WebSocket price updates (epic, bid, offer, timestamp, change%)\n- StreamAlert: Alert trigger events (condition, trigger/current price)\n- PortfolioSnapshot: Real-time portfolio state (positions, total P&L)\n\n## New MCP Tools (3)\n\n**1. cap_stream_prices**\n- Stream real-time bid/offer prices for multiple markets\n- Parameters: epics (list), duration_s (default 300), update_interval_s\n- Returns: Price ticks with timestamps\n- Max 40 concurrent EPICs (Capital.com limit)\n\n**2. cap_stream_alerts**\n- Monitor markets for price level alerts\n- Parameters: alerts (dict with levels/directions), duration_s, auto_close\n- Returns: Triggered alerts when conditions met\n- Supports ABOVE/BELOW conditions\n\n**3. cap_stream_portfolio**\n- Stream live P&L updates for open positions\n- Parameters: duration_s (default 300), update_interval_s (default 5)\n- Returns: Portfolio snapshots with position P&L\n- Auto-fetches positions and subscribes to their markets\n\n## New MCP Prompts (3)\n\n**1. live_price_monitor**\n- Real-time price tracking workflow with movement alerts\n- Guides user through market selection, baseline capture, streaming\n- Alert on % threshold breaches\n- Displays live price board with continuous updates\n\n**2. real_time_alerts**\n- Conditional price level alert workflow\n- Helps configure support/resistance/breakout alerts\n- Instant notifications when levels crossed\n- Optional auto-stop after first alert\n\n**3. live_portfolio_monitor**\n- Live portfolio P&L tracking workflow\n- Fetches positions, streams prices, calculates live P&L\n- Alerts on P&L threshold crossings\n- Updates every 5 seconds\n\n## Testing\n\n**New Test File (tests/test_websocket.py - 146 lines)**\n- WebSocket client connection and subscription tests\n- Model validation tests (PriceTick, StreamAlert, PortfolioSnapshot)\n- Message parsing tests\n- Tool/prompt registration validation\n\n**Updated Tests**\n- test_mcp_registration.py: Updated to expect 36 tools, 7 prompts\n- test_prompts.py: Updated to expect 7 prompts\n- All 21 tests passing (was 13)\n\n## Configuration\n\n**Updated .env.example**\n- Enhanced CAP_WS_ENABLED documentation\n- Added usage notes and limitations\n\n**Updated pyproject.toml**\n- Added websockets>=12.0 dependency\n\n## Documentation\n\n**Updated README.md**\n- Status: 85% \u2192 95% complete\n- Added WebSocket client to infrastructure\n- Added 3 streaming tools to tools list\n- Added 3 streaming prompts to prompts list\n- Updated test count: 13 \u2192 21\n- Marked WebSocket support as completed\n\n## Technical Notes\n\n- Per-tool connection lifecycle (not singleton background service)\n- Uses modern websockets async API (websockets.asyncio.client)\n- Timezone-aware datetime with UTC (datetime.now(UTC))\n- All streaming operations require CAP_WS_ENABLED=true\n- Capital.com WebSocket sessions last 10 minutes max\n- Graceful cleanup via async context managers\n\n## Usage Example\n\n```python\n# Enable in .env\nCAP_WS_ENABLED=true\n\n# Stream live prices\nawait cap_stream_prices(\n    epics=[\"GOLD\", \"SILVER\"],\n    duration_s=120.0\n)\n\n# Set price alerts\nawait cap_stream_alerts(\n    alerts={\"GOLD\": {\"level\": 2050.0, \"direction\": \"ABOVE\"}},\n    auto_close=True\n)\n\n# Monitor portfolio\nawait cap_stream_portfolio(duration_s=300.0)\n```\n\nTests: 21/21 passing\nLines added: ~1200 (298 client + 669 server + 146 tests + 33 models + docs)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-17T07:59:57.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "0be9caf5",
+            "tittle": "Reorganize project structure for production readiness",
+            "message": "Reorganize project structure for production readiness\n\n- Move working files to archive/ (excluded from git)\n- Move test files from root to tests/ directory\n- Remove duplicate pytest.ini (config in pyproject.toml)\n- Update .gitignore to exclude archive/ and doc/ directories\n- Update USAGE.md with WebSocket streaming tools (3 tools added)\n\nFiles archived:\n- Documentation: README_GITHUB.md, GITHUB_PREP.md, PUBLISH_INSTRUCTIONS.md\n- Planning docs: PHASE5_PLAN.md, PHASE7_TESTING_PLAN.md, BUG_FIX_SUMMARY.md\n- Working files: QUICKFIX.md, MIGRATION_COMPLETE.md, READY_TO_PUSH.txt\n- Scripts: UPDATE_SPEC.sh, verify_git.sh, test_fastmcp.py\n\nFiles reorganized:\n- test_prompts.py -> tests/test_prompts.py\n- test_resources.py -> tests/test_resources.py\n- pytest.ini removed (config in pyproject.toml)\n\nResult: Clean repository structure with only production files tracked\n",
+            "date": "2026-01-17T08:11:45.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "6c69433b",
+            "tittle": "Fix critical bugs: error display, WebSocket, enum serialization, account context",
+            "message": "Fix critical bugs: error display, WebSocket, enum serialization, account context\n\nImplemented 5 critical fixes after comprehensive testing of all 36 MCP tools:\n\n1. Error Message Display [CRITICAL]\n   - Parse JSON error responses from Capital.com API\n   - Extract errorCode field and display actual error message\n   - File: capital_mcp/capital_client.py (lines 154-189)\n   - Before: \"HTTP 400: \"\n   - After: \"HTTP 400: Rejected. GOLD is currently closed...\"\n\n2. WebSocket Connection [CRITICAL]\n   - Fix parameter name: extra_headers \u2192 additional_headers\n   - File: capital_mcp/websocket_client.py (line 84)\n   - Unblocks all 3 WebSocket streaming tools\n   - Tested: Connection successful, subscriptions working\n\n3. Direction Enum Serialization [HIGH]\n   - Use mode='json' in model_dump() to serialize enums as strings\n   - File: capital_mcp/risk.py (line 244)\n   - Before: Direction.BUY (enum)\n   - After: \"BUY\" (string)\n\n4. Add Account Context [MEDIUM]\n   - Add active_account_id to trade execution responses\n   - Files: capital_mcp/server.py (6 tools updated)\n   - Tools: login, account_list, execute_position, execute_order, close_position, cancel_order\n\nTesting:\n- All 36 MCP tools tested on demo account\n- Write operations verified: created/cancelled order r_117130565650594\n- Write operations verified: created/deleted watchlist 117130499621953\n- WebSocket connection successful\n- Error messages display correctly\n- Direction enums serialize correctly\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\n",
+            "date": "2026-01-17T13:15:34.000+02:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "SimonTarara62"
+        },
+        {
+            "commit": "2f1579aa",
+            "tittle": "Delete README.md",
+            "message": "Delete README.md",
+            "date": "2026-02-12T10:03:31.000+00:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "Jo\u00e3o Branco"
+        },
+        {
+            "commit": "6ee6970c",
+            "tittle": "Upload New File",
+            "message": "Upload New File",
+            "date": "2026-02-12T10:03:52.000+00:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "Jo\u00e3o Branco"
+        },
+        {
+            "commit": "72fce0f4",
+            "tittle": "Delete README.md",
+            "message": "Delete README.md",
+            "date": "2026-03-11T08:31:35.000+00:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "Jo\u00e3o Branco"
+        },
+        {
+            "commit": "1994d282",
+            "tittle": "Upload New File",
+            "message": "Upload New File",
+            "date": "2026-03-11T08:31:54.000+00:00",
+            "jira_tickets": [
+                "not_found"
+            ],
+            "author_name": "Jo\u00e3o Branco"
+        },
+        {
+            "commit": "20781b7a",
+            "tittle": "MPD-67896 Fix MCP resource runtime errors, improve secret redaction and type safety",
+            "message": "MPD-67896 Fix MCP resource runtime errors, improve secret redaction and type safety\n",
+            "date": "2026-04-01T09:16:31.000+02:00",
+            "jira_tickets": [
+                "MPD-67896"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "87c2872a",
+            "tittle": "MPD-67896: Bug fixes, error handling, WebSocket fix, and documentation improvements",
+            "message": "MPD-67896: Bug fixes, error handling, WebSocket fix, and documentation improvements\n",
+            "date": "2026-04-03T07:32:43.000+00:00",
+            "jira_tickets": [
+                "MPD-67896"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "36109001",
+            "tittle": "MPD-83552 add ci + sonar + trivy",
+            "message": "MPD-83552 add ci + sonar + trivy\n",
+            "date": "2026-04-10T07:23:25.000+00:00",
+            "jira_tickets": [
+                "MPD-83552"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "dda2b950",
+            "tittle": "MPD-84130 fix logs timings",
+            "message": "MPD-84130 fix logs timings\n",
+            "date": "2026-04-15T12:39:00.000+02:00",
+            "jira_tickets": [
+                "MPD-84130"
+            ],
+            "author_name": "valery.kashel"
+        },
+        {
+            "commit": "6922e01a",
+            "tittle": "MPD-84126 add manifest file",
+            "message": "MPD-84126 add manifest file\n",
+            "date": "2026-04-16T10:19:35.000+02:00",
+            "jira_tickets": [
+                "MPD-84126"
+            ],
+            "author_name": "valery.kashel"
+        },
+        {
+            "commit": "db604a94",
+            "tittle": "MPD-84126 Add manifest.json for MCPB bundle compliance",
+            "message": "MPD-84126 Add manifest.json for MCPB bundle compliance\n",
+            "date": "2026-04-17T06:24:42.000+00:00",
+            "jira_tickets": [
+                "MPD-84126"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "577e8a04",
+            "tittle": "MPD-83522 Adjust CI to publish to github with authentication via private ssh key",
+            "message": "MPD-83522 Adjust CI to publish to github with authentication via private ssh key\n",
+            "date": "2026-04-17T06:38:15.000+00:00",
+            "jira_tickets": [
+                "MPD-83522"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "bb6762bd",
+            "tittle": "MPD-84216 update readme according to installation via manifest.json and mcpb",
+            "message": "MPD-84216 update readme according to installation via manifest.json and mcpb\n",
+            "date": "2026-04-17T11:31:27.000+02:00",
+            "jira_tickets": [
+                "MPD-84216"
+            ],
+            "author_name": "valery.kashel"
+        },
+        {
+            "commit": "9ced5631",
+            "tittle": "MPD-83523 fix sonar issues + increase test coverage",
+            "message": "MPD-83523 fix sonar issues + increase test coverage\n",
+            "date": "2026-04-17T12:55:59.000+00:00",
+            "jira_tickets": [
+                "MPD-83523"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "d43125ea",
+            "tittle": "MPD-84216 update disclaimer and safety notes in readme",
+            "message": "MPD-84216 update disclaimer and safety notes in readme\n",
+            "date": "2026-04-17T17:08:15.000+02:00",
+            "jira_tickets": [
+                "MPD-84216"
+            ],
+            "author_name": "valery.kashel"
+        },
+        {
+            "commit": "03bf393e",
+            "tittle": "MPD-83522 add manual approval gate before publish:to:public",
+            "message": "MPD-83522 add manual approval gate before publish:to:public\n",
+            "date": "2026-04-20T08:08:37.000+00:00",
+            "jira_tickets": [
+                "MPD-83522"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "00655fd3",
+            "tittle": "MPD-85244 update readme according to compliance review",
+            "message": "MPD-85244 update readme according to compliance review\n",
+            "date": "2026-04-20T16:58:39.000+02:00",
+            "jira_tickets": [
+                "MPD-85244"
+            ],
+            "author_name": "valery.kashel"
+        },
+        {
+            "commit": "966ce991",
+            "tittle": "MPD-85244 Update readme",
+            "message": "MPD-85244 Update readme\n",
+            "date": "2026-04-28T09:18:10.000+00:00",
+            "jira_tickets": [
+                "MPD-85244"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "c365a4ab",
+            "tittle": "MPD-86638 Add custom User-Agent header to MCP server",
+            "message": "MPD-86638 Add custom User-Agent header to MCP server\n",
+            "date": "2026-04-30T06:35:08.000+00:00",
+            "jira_tickets": [
+                "MPD-86638"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "5adcfe18",
+            "tittle": "MPD-87209 Add version generation and git tagging to CI pipeline",
+            "message": "MPD-87209 Add version generation and git tagging to CI pipeline\n",
+            "date": "2026-05-06T13:13:02.000+00:00",
+            "jira_tickets": [
+                "MPD-87209"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "97940487",
+            "tittle": "MPD-87640 Move prod tag before publish in CI pipeline",
+            "message": "MPD-87640 Move prod tag before publish in CI pipeline\n",
+            "date": "2026-05-08T15:18:48.000+00:00",
+            "jira_tickets": [
+                "MPD-87640"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "84ed5aa1",
+            "tittle": "MPD-87886 Update readme with FAQ UK link",
+            "message": "MPD-87886 Update readme with FAQ UK link\n",
+            "date": "2026-05-11T10:34:46.000+00:00",
+            "jira_tickets": [
+                "MPD-87886"
+            ],
+            "author_name": "Valery Kashel"
+        },
+        {
+            "commit": "39f756f3",
+            "tittle": "MPD-87907 Address Service Standards compliance \u2014 CI/CD fixes, port.yml",
+            "message": "MPD-87907 Address Service Standards compliance \u2014 CI/CD fixes, port.yml\n",
+            "date": "2026-05-11T15:26:08.000+00:00",
+            "jira_tickets": [
+                "MPD-87907"
+            ],
+            "author_name": "Valery Kashel"
+        }
+    ],
+    "TEST_TAG": [
+        {
+            "commit": "39f756f3",
+            "tittle": "MPD-87907 Address Service Standards compliance \u2014 CI/CD fixes, port.yml",
+            "message": "MPD-87907 Address Service Standards compliance \u2014 CI/CD fixes, port.yml\n",
+            "date": "2026-05-11T15:26:08.000+00:00",
+            "jira_tickets": [
+                "MPD-87907"
+            ],
+            "author_name": "Valery Kashel"
+        }
+    ]
+}

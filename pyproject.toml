@@ -1,6 +1,6 @@
 [project]
 name = "capital-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Model Context Protocol server for Capital.com Open API"
 authors = [
     {name = "Capital MCP Team"}

@@ -11,15 +11,15 @@ echo
 # Check Python version
 echo "Checking Python version..."
 if ! command -v python3 &> /dev/null; then
-    echo "Error: python3 not found. Please install Python 3.10 or higher."
+    echo "Error: python3 not found. Please install Python 3.10 or higher." >&2
     exit 1
 fi
 
 PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
 REQUIRED_VERSION="3.10"
 
-if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
-    echo "Error: Python $PYTHON_VERSION found, but $REQUIRED_VERSION or higher is required."
+if [[ "$(printf '%s\n' "$REQUIRED_VERSION" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]]; then
+    echo "Error: Python $PYTHON_VERSION found, but $REQUIRED_VERSION or higher is required." >&2
     exit 1
 fi
 
@@ -27,16 +27,16 @@ echo "OK: Python $PYTHON_VERSION found"
 
 # Check venv module is available
 if ! python3 -m venv --help &> /dev/null; then
-    echo "Error: Python venv module not found."
-    echo "On Ubuntu/Debian, install it with: sudo apt install python3-venv"
-    echo "On macOS, reinstall Python with: brew install python3"
+    echo "Error: Python venv module not found." >&2
+    echo "On Ubuntu/Debian, install it with: sudo apt install python3-venv" >&2
+    echo "On macOS, reinstall Python with: brew install python3" >&2
     exit 1
 fi
 echo
 
 # Create virtual environment
 echo "Creating virtual environment..."
-if [ -d "venv" ]; then
+if [[ -d "venv" ]]; then
     echo "Virtual environment already exists. Skipping..."
 else
     python3 -m venv venv
@@ -72,8 +72,8 @@ echo "OK: Dependencies installed"
 echo
 
 # Create .env file if it doesn't exist
-if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
+if [[ ! -f ".env" ]]; then
+    if [[ -f ".env.example" ]]; then
         echo "Creating .env file from template..."
         cp .env.example .env
         echo "OK: .env file created"
@@ -94,7 +94,7 @@ echo "Verifying installation..."
 if python -c "import capital_mcp" 2>/dev/null; then
     echo "OK: Installation successful!"
 else
-    echo "Error: Installation verification failed"
+    echo "Error: Installation verification failed" >&2
     exit 1
 fi
 echo

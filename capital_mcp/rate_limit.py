@@ -28,7 +28,11 @@ class TokenBucket:
         self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
         self.last_refill = now
 
-    async def acquire(self, tokens: float = 1.0, timeout: float | None = None) -> bool:
+    async def acquire(
+        self,
+        tokens: float = 1.0,
+        timeout: float | None = None,  # NOSONAR asyncio.timeout() requires Python 3.11+
+    ) -> bool:
         """
         Acquire tokens from the bucket.
 
@@ -104,7 +108,10 @@ class RateLimiter:
         # Trading rate limit: 1 req per 0.1s = 10 req/s
         self.trading_limiter = TokenBucket(capacity=10.0, refill_rate=10.0)
 
-    async def acquire_global(self, timeout: float | None = 10.0) -> bool:
+    async def acquire_global(
+        self,
+        timeout: float | None = 10.0,  # NOSONAR asyncio.timeout() requires Python 3.11+
+    ) -> bool:
         """
         Acquire global rate limit token.
 
@@ -116,7 +123,10 @@ class RateLimiter:
         """
         return await self.global_limiter.acquire(tokens=1.0, timeout=timeout)
 
-    async def acquire_session(self, timeout: float | None = 10.0) -> bool:
+    async def acquire_session(
+        self,
+        timeout: float | None = 10.0,  # NOSONAR asyncio.timeout() requires Python 3.11+
+    ) -> bool:
         """
         Acquire session rate limit token (for POST /session).
 
@@ -131,7 +141,10 @@ class RateLimiter:
             return False
         return await self.session_limiter.acquire(tokens=1.0, timeout=timeout)
 
-    async def acquire_trading(self, timeout: float | None = 10.0) -> bool:
+    async def acquire_trading(
+        self,
+        timeout: float | None = 10.0,  # NOSONAR asyncio.timeout() requires Python 3.11+
+    ) -> bool:
         """
         Acquire trading rate limit token (for POST /positions, POST /workingorders).
 

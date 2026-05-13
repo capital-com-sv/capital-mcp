@@ -24,11 +24,17 @@
     "type": "uv",
     "entry_point": "capital_mcp/server.py",
     "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--script", "${__dirname}/capital_mcp/server.py"],
       "env": {
         "CAP_ENV": "${user_config.env}",
         "CAP_API_KEY": "${user_config.api_key}",
         "CAP_IDENTIFIER": "${user_config.identifier}",
-        "CAP_API_PASSWORD": "${user_config.password}"
+        "CAP_API_PASSWORD": "${user_config.password}",
+        "CAP_ALLOW_TRADING": "${user_config.allow_trading}",
+        "CAP_ALLOWED_EPICS": "${user_config.allowed_epics}",
+        "CAP_DRY_RUN": "${user_config.dry_run}",
+        "CAP_WS_ENABLED": "${user_config.ws_enabled}"
       }
     }
   },
@@ -44,16 +50,14 @@
     "env": {
       "type": "string",
       "title": "Environment",
-      "description": "Trading environment: 'demo' for paper trading, 'live' for real money. Default: demo.",
-      "enum": ["demo", "live"],
+      "description": "Trading environment: 'demo' for paper trading, 'live' for real money. Valid values: demo, live.",
       "default": "demo",
-      "sensitive": false,
       "required": false
     },
     "api_key": {
       "type": "string",
       "title": "API Key",
-      "description": "Your Capital.com API key. Generate at: Settings > API integrations > Generate new key. Required before using any tools.",
+      "description": "Your Capital.com API key. Generate at: Settings > API integrations > Generate new key.",
       "sensitive": true,
       "required": true
     },
@@ -61,7 +65,6 @@
       "type": "string",
       "title": "Email (Identifier)",
       "description": "Your Capital.com account email address used to log in.",
-      "sensitive": false,
       "required": true
     },
     "password": {
@@ -70,6 +73,34 @@
       "description": "Your Capital.com API key custom password (not your platform login password).",
       "sensitive": true,
       "required": true
+    },
+    "allow_trading": {
+      "type": "boolean",
+      "title": "Allow Trading",
+      "description": "Enable trading operations. When false, only read-only tools (market data, account info) are available.",
+      "default": false,
+      "required": false
+    },
+    "allowed_epics": {
+      "type": "string",
+      "title": "Allowed EPICs",
+      "description": "Comma-separated list of instrument EPICs allowed for trading (e.g. SILVER,GOLD,BTCUSD). Use 'ALL' for unrestricted. Required when trading is enabled.",
+      "default": "",
+      "required": false
+    },
+    "dry_run": {
+      "type": "boolean",
+      "title": "Dry Run Mode",
+      "description": "When enabled, all trade executions are refused. Useful for testing the trading flow without real orders.",
+      "default": false,
+      "required": false
+    },
+    "ws_enabled": {
+      "type": "boolean",
+      "title": "Enable WebSocket Streaming",
+      "description": "Enable real-time price streaming tools via WebSocket. Sessions last 10 minutes max with auto-reconnect.",
+      "default": false,
+      "required": false
     }
   }
 }

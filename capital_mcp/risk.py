@@ -1,7 +1,7 @@
 """Risk engine and preview cache for trade validation."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from .capital_client import get_client
@@ -50,7 +50,7 @@ class RiskEngine:
 
     def _check_daily_limit(self) -> RiskCheck:
         """Check if daily order limit is reached."""
-        today = datetime.utcnow().date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
 
         # Reset counter if new day
         if self._order_count_date != today:
@@ -76,7 +76,7 @@ class RiskEngine:
 
     def increment_order_count(self) -> None:
         """Increment daily order counter."""
-        today = datetime.utcnow().date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         if self._order_count_date != today:
             self._order_count = 0
             self._order_count_date = today

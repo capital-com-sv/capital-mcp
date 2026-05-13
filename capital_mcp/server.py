@@ -21,6 +21,11 @@ from .utils import poll_until
 
 logger = logging.getLogger(__name__)
 
+# String constants
+POSITIONS_PATH = "/positions"
+CONFIRM_REQUIRED_MESSAGE = "Explicit confirmation required. Set confirm=true"
+CONFIRMATION_TIMEOUT_MESSAGE = "Confirmation timed out"
+
 # Initialize FastMCP server
 mcp = FastMCP("Capital.com MCP Server")
 mcp.add_middleware(ErrorHandlerMiddleware())
@@ -412,7 +417,7 @@ async def cap_account_demo_topup(amount: float, confirm: bool = False) -> dict[s
 
     # Confirmation check
     if config.cap_require_explicit_confirm and not confirm:
-        raise ValueError("Explicit confirmation required. Set confirm=true")
+        raise ValueError(CONFIRM_REQUIRED_MESSAGE)
 
     session = get_session_manager()
     await session.ensure_logged_in()
@@ -447,8 +452,11 @@ async def _wait_for_confirmation(
         return result
 
     def is_complete(data: dict[str, Any]) -> bool:
-        status = data.get("status")
-        return status in ("ACCEPTED", "REJECTED")
+        # Capital.com returns two separate fields: `status` (OPEN/CLOSED — position
+        # lifecycle) and `dealStatus` (ACCEPTED/REJECTED — broker acceptance).
+        # We poll for broker acceptance, not position lifecycle.
+        deal_status = data.get("dealStatus")
+        return deal_status in ("ACCEPTED", "REJECTED")
 
     result_data = await poll_until(
         check_confirm,
@@ -481,7 +489,7 @@ async def cap_trade_positions_list() -> dict[str, Any]:
     await session.ensure_logged_in()
 
     client = get_client()
-    response = await client.get("/positions")
+    response = await client.get(POSITIONS_PATH)
     result: dict[str, Any] = response.json()
     return result
 
@@ -642,7 +650,7 @@ async def cap_trade_preview_position(
 
 
 @mcp.tool()
-async def cap_trade_preview_working_order(
+async def cap_trade_preview_working_order(  # NOSONAR flat signature is idiomatic for MCP tools — nested schemas are harder for LLMs to construct
     epic: str,
     direction: str,
     type: str,
@@ -786,7 +794,7 @@ async def cap_trade_execute_position(
 
     # Execute trade
     client = get_client()
-    response = await client.post("/positions", json=broker_request, rate_limit_type="trading")
+    response = await client.post(POSITIONS_PATH, json=broker_request, rate_limit_type="trading")
     data: dict[str, Any] = response.json()
 
     # Consume preview to prevent double execution
@@ -804,7 +812,7 @@ async def cap_trade_execute_position(
             )
             data["confirmation"] = confirm_data
         except TimeoutError:
-            data["confirmation"] = {"status": "TIMEOUT", "message": "Confirmation timed out"}
+            data["confirmation"] = {"status": "TIMEOUT", "message": CONFIRMATION_TIMEOUT_MESSAGE}
 
     data["active_account_id"] = session.account_id
     return data
@@ -887,7 +895,7 @@ async def cap_trade_execute_working_order(
             )
             data["confirmation"] = confirm_data
         except TimeoutError:
-            data["confirmation"] = {"status": "TIMEOUT", "message": "Confirmation timed out"}
+            data["confirmation"] = {"status": "TIMEOUT", "message": CONFIRMATION_TIMEOUT_MESSAGE}
 
     data["active_account_id"] = session.account_id
     return data
@@ -930,7 +938,7 @@ async def cap_trade_positions_close(
             )
             data["confirmation"] = confirm_data
         except TimeoutError:
-            data["confirmation"] = {"status": "TIMEOUT", "message": "Confirmation timed out"}
+            data["confirmation"] = {"status": "TIMEOUT", "message": CONFIRMATION_TIMEOUT_MESSAGE}
 
     data["active_account_id"] = session.account_id
     return data
@@ -973,7 +981,7 @@ async def cap_trade_orders_cancel(
             )
             data["confirmation"] = confirm_data
         except TimeoutError:
-            data["confirmation"] = {"status": "TIMEOUT", "message": "Confirmation timed out"}
+            data["confirmation"] = {"status": "TIMEOUT", "message": CONFIRMATION_TIMEOUT_MESSAGE}
 
     data["active_account_id"] = session.account_id
     return data
@@ -1035,7 +1043,7 @@ async def cap_watchlists_create(name: str, confirm: bool = False) -> dict[str, A
     """
     config = get_config()
     if config.cap_require_explicit_confirm and not confirm:
-        raise ValueError("Explicit confirmation required. Set confirm=true")
+        raise ValueError(CONFIRM_REQUIRED_MESSAGE)
 
     session = get_session_manager()
     await session.ensure_logged_in()
@@ -1063,7 +1071,7 @@ async def cap_watchlists_add_market(
     """
     config = get_config()
     if config.cap_require_explicit_confirm and not confirm:
-        raise ValueError("Explicit confirmation required. Set confirm=true")
+        raise ValueError(CONFIRM_REQUIRED_MESSAGE)
 
     session = get_session_manager()
     await session.ensure_logged_in()
@@ -1088,7 +1096,7 @@ async def cap_watchlists_delete(watchlist_id: str, confirm: bool = False) -> dic
     """
     config = get_config()
     if config.cap_require_explicit_confirm and not confirm:
-        raise ValueError("Explicit confirmation required. Set confirm=true")
+        raise ValueError(CONFIRM_REQUIRED_MESSAGE)
 
     session = get_session_manager()
     await session.ensure_logged_in()
@@ -1115,7 +1123,7 @@ async def cap_watchlists_remove_market(
     """
     config = get_config()
     if config.cap_require_explicit_confirm and not confirm:
-        raise ValueError("Explicit confirmation required. Set confirm=true")
+        raise ValueError(CONFIRM_REQUIRED_MESSAGE)
 
     session = get_session_manager()
     await session.ensure_logged_in()
@@ -1153,7 +1161,7 @@ async def cap_stream_prices(
 
     Requires authentication.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from .websocket_client import get_websocket_client
 
@@ -1176,7 +1184,7 @@ async def cap_stream_prices(
 
     # Stream prices
     ticks_collected = []
-    last_update = datetime.utcnow()
+    last_update = datetime.now(timezone.utc)
 
     try:
         async with get_websocket_client() as ws:
@@ -1184,7 +1192,7 @@ async def cap_stream_prices(
 
             async for tick in ws.stream(duration=duration_s):
                 # Throttle updates based on interval
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 if (now - last_update).total_seconds() >= update_interval_s:
                     ticks_collected.append(tick.model_dump())
                     last_update = now
@@ -1340,7 +1348,7 @@ async def cap_stream_portfolio(
 
     Requires authentication.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from .models import PortfolioSnapshot
     from .websocket_client import get_websocket_client
@@ -1352,7 +1360,7 @@ async def cap_stream_portfolio(
 
     # Fetch current positions
     try:
-        positions_response = await client.get("/positions")
+        positions_response = await client.get(POSITIONS_PATH)
         positions_data = positions_response.json()
         positions = positions_data.get("positions", [])
 
@@ -1385,14 +1393,14 @@ async def cap_stream_portfolio(
             }
 
         snapshots: list[PortfolioSnapshot] = []
-        last_update = datetime.utcnow()
+        last_update = datetime.now(timezone.utc)
 
         async with get_websocket_client() as ws:
             await ws.subscribe(epics)
 
             async for _tick in ws.stream(duration=duration_s):
                 # Throttle updates
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 if (now - last_update).total_seconds() < update_interval_s:
                     continue
 
@@ -1422,7 +1430,7 @@ async def cap_stream_portfolio(
                 snapshot = PortfolioSnapshot(
                     positions=updated_positions,
                     total_pnl=total_pnl,
-                    timestamp=now.isoformat() + "Z",
+                    timestamp=now.isoformat().replace("+00:00", "Z"),
                 )
                 snapshots.append(snapshot)
 
@@ -1989,7 +1997,7 @@ async def cap_risk_policy_resource() -> list[Any]:
                     "9. Deal reference validation (execute must match preview)",
                     "10. Broker-side validation (final gateway)",
                 ],
-                "safety_features": {
+                "execution_controls": {
                     "preview_required": True,
                     "deal_reference_matching": True,
                     "authentication_required": True,

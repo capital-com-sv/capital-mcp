@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from .capital_client import get_client
@@ -11,6 +11,8 @@ from .errors import SessionError
 from .models import SessionStatus, SessionTokens
 
 logger = logging.getLogger(__name__)
+
+SESSION_PATH = "/session"
 
 
 class SessionManager:
@@ -61,7 +63,7 @@ class SessionManager:
             try:
                 # POST /session with special rate limit
                 response = await self.client.post(
-                    "/session",
+                    SESSION_PATH,
                     json=login_data,
                     rate_limit_type="session",
                 )
@@ -120,7 +122,7 @@ class SessionManager:
         logger.info(f"Switching to account: {account_id}")
 
         response = await self.client.put(
-            "/session",
+            SESSION_PATH,
             json={"accountId": account_id},
         )
 
@@ -152,7 +154,7 @@ class SessionManager:
 
         try:
             logger.info("Logging out")
-            await self.client.delete("/session")
+            await self.client.delete(SESSION_PATH)
         except Exception as e:
             logger.warning(f"Logout request failed: {e}")
         finally:
@@ -182,7 +184,7 @@ class SessionManager:
             )
 
         # Calculate expiry estimate
-        age = (datetime.utcnow() - self.tokens.last_used_at).total_seconds()
+        age = (datetime.now(timezone.utc) - self.tokens.last_used_at).total_seconds()
         expires_in = max(0, int(540 - age))  # 9 minutes = 540 seconds
 
         return SessionStatus(
@@ -190,7 +192,7 @@ class SessionManager:
             base_url=self.config.base_url,
             logged_in=True,
             account_id=self.account_id,
-            last_used_at=self.tokens.last_used_at.isoformat() + "Z",
+            last_used_at=self.tokens.last_used_at.isoformat().replace("+00:00", "Z"),
             expires_in_s_estimate=expires_in,
         )
 

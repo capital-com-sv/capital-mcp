@@ -1,15 +1,20 @@
 # Capital.com MCP Server
 
-Model Context Protocol (MCP) server for Capital.com Open API - enabling safe, LLM-driven trading operations.
+Model Context Protocol (MCP) server for Capital.com Open API - enabling LLM-driven access to your Capital.com trading account.
 
-> Your use of the Capital.com Public API and any third-party tools you connect to it, including AI or LLM-based tools, is at your own discretion and risk. Capital.com operates on an execution-only basis and does not control, endorse, or accept liability for any third-party software, its outputs, or any resulting outcomes. Nothing on this page constitutes investment advice or a recommendation to trade. You are solely responsible for all trading decisions, configurations, and automated activity on your account, and must ensure your use complies with Capital.com's Terms and Conditions, Electronic Trading Terms, and all applicable laws in your jurisdiction. [Read full disclaimer](#disclaimer--use-of-capitalcom-public-api-with-third-party-tools)
+## ⚠️ Important Notice
 
-## ⚠️ Important Safety Notice
+**Your use of the Capital.com Public API and any third-party tools you connect to it, including AI or LLM-based tools, is at your own discretion and risk. Capital.com operates on an execution-only basis and does not control, endorse, or accept liability for any third-party software, its outputs, or any resulting outcomes. Nothing on this page constitutes investment advice or a recommendation to trade. You are solely responsible for all trading decisions, configurations, and automated activity on your account, and must ensure your use complies with Capital.com 's Terms and Conditions, Electronic Trading Terms, and all applicable laws in your jurisdiction.**
+
+**Crypto Derivatives are not available to Retail clients registered with Capital Com (UK) Ltd.**
 
 - Always start with a **Demo account** before considering live trading
 - Trading is **disabled by default** and requires explicit configuration
 - All trade operations require **two-phase execution** (preview → confirm → execute)
 - Built-in risk controls: allowlists, size limits, daily order caps
+- **Use at your own risk** - the authors assume no liability for trading losses
+
+**For further questions/clarifications, please refer to the FAQ: https://help.capitalccuk.com/hc/en-us/articles/34503231743506-How-to-set-up-the-Capital-com-MCP-Server**
 
 ## Quick Start Guide
 
@@ -29,6 +34,30 @@ Model Context Protocol (MCP) server for Capital.com Open API - enabling safe, LL
    - Note: API keys are trading-capable; Capital.com doesn't offer read-only keys
 
 ### Step 2: Install & Configure
+
+You have two installation options:
+
+#### Option A: One-Click Install via MCPB Bundle (Recommended)
+
+The repo ships a [`manifest.json`](manifest.json) that conforms to the [MCPB (MCP Bundle) spec](https://github.com/modelcontextprotocol/mcpb/blob/main/MANIFEST.md) — the open standard from Anthropic for packaging local MCP servers. This lets you install the server in Claude Desktop (and other MCPB-compatible clients) without manually editing config files.
+
+**Prerequisites:** [uv](https://docs.astral.sh/uv/) (the server uses `uv` as its runtime — install with `brew install uv` or see the [uv docs](https://docs.astral.sh/uv/getting-started/installation/)).
+
+**Steps:**
+
+1. Clone the repo and build the `.mcpb` bundle (requires [Node.js](https://nodejs.org/) for `npx`):
+   ```bash
+   git clone https://github.com/capital-com-sv/capital-mcp.git
+   cd capital-mcp
+   npx @anthropic-ai/mcpb pack . capital-mcp.mcpb
+   ```
+2. Open `capital-mcp.mcpb` in Claude Desktop (double-click, or drag it into the app).
+3. Claude Desktop will prompt you for the user config values (API key, identifier, password, trading controls). Fill them in and click Install.
+4. Restart Claude Desktop and verify by asking: "What Capital.com tools are available?"
+
+See the [MCPB CLI reference](https://github.com/modelcontextprotocol/mcpb) for additional commands (`validate`, `info`, `unpack`, `sign`).
+
+#### Option B: Manual Install via Script
 
 **Prerequisites:** Python 3.10+ and Git must be installed.
 - macOS: `brew install python3 git`
@@ -58,7 +87,7 @@ CAP_API_KEY=your_generated_api_key_here
 CAP_IDENTIFIER=your_email@example.com
 CAP_API_PASSWORD=your_custom_api_password
 
-# Safety (keep trading disabled until ready)
+# Trading controls (keep trading disabled until ready)
 CAP_ALLOW_TRADING=false
 CAP_ALLOWED_EPICS=
 
@@ -119,6 +148,8 @@ Get-Content $env:APPDATA\Claude\logs\mcp-server-capital-com.log -Wait
 > **Note:** Replace `/path/to/capital-mcp/venv/bin/python` with your actual venv Python path. The install script prints this for you. On Windows, use `C:\path\to\capital-mcp\venv\Scripts\python.exe`.
 
 ### Claude Desktop
+
+> 💡 **Tip:** If you installed via the MCPB bundle (Option A above), skip this section — Claude Desktop writes the config for you based on `manifest.json`. Use this section only for manual script installs.
 
 #### macOS/Linux
 
@@ -301,7 +332,7 @@ CAP_ALLOW_TRADING=true
 CAP_ALLOWED_EPICS=SILVER
 ```
 
-### Safe Trading Workflow (When Trading Enabled)
+### Trade Execution Workflow (When Trading Enabled)
 
 ```
 1. Preview the trade (validates everything, no side effects):
@@ -332,7 +363,7 @@ CAP_ALLOWED_EPICS=SILVER
 - `CAP_IDENTIFIER` - Login email
 - `CAP_API_PASSWORD` - API key custom password
 
-### Safety Controls (Recommended)
+### Risk Controls (Recommended)
 - `CAP_ALLOW_TRADING` - Enable trading (default: false)
 - `CAP_ALLOWED_EPICS` - Comma-separated allowlist (e.g., "SILVER,GOLD,BTCUSD") or "ALL" for unrestricted
 - `CAP_MAX_POSITION_SIZE` - Max position size (default: 1.0)
@@ -379,11 +410,11 @@ CAP_ALLOWED_EPICS=SILVER
   - `cap_trade_confirm_get` - Get confirmation status
   - `cap_trade_confirm_wait` - Wait for confirmation
 
-- **Preview (safe):**
+- **Preview:**
   - `cap_trade_preview_position` - Preview position
   - `cap_trade_preview_working_order` - Preview order
 
-- **Execute (guarded):**
+- **Execute:**
   - `cap_trade_execute_position` - Execute position
   - `cap_trade_execute_working_order` - Execute order
   - `cap_trade_positions_close` - Close position
@@ -406,10 +437,10 @@ CAP_ALLOWED_EPICS=SILVER
 
 MCP prompts are structured workflows that guide Claude through complex multi-step trading operations. They provide step-by-step instructions and best practices for common tasks.
 
-### Available Prompts (4)
+### Available Prompts (7)
 
 #### 1. `market_scan` - Market Analysis Workflow
-Guides you through scanning a watchlist for trading opportunities.
+Guides you through scanning a watchlist for trading conditions.
 
 **Parameters:**
 - `watchlist_id` - Watchlist to scan (leave empty to list watchlists first)
@@ -434,7 +465,7 @@ Change your configurations to:
 
 
 #### 2. `trade_proposal` - Trade Planning Workflow
-Guides you through creating a trade proposal with proper risk management.
+Guides you through creating a trade proposal with risk management tools.
 
 **Parameters:**
 - `epic` - Market to trade (required, e.g., SILVER, GOLD)
@@ -453,10 +484,10 @@ Guides you through creating a trade proposal with proper risk management.
 - "Create a trade proposal for SILVER"
 - "Propose a long trade on GOLD with 2% risk"
 
-**Safety:** This prompt does NOT execute trades - it only creates previews.
+**Note:** This prompt does NOT execute trades - it only creates previews.
 
 #### 3. `execute_trade` - Trade Execution Workflow
-Guides you through executing a previewed trade safely.
+Guides you through executing a previewed trade.
 
 **Parameters:**
 - `preview_id` - Preview ID from trade_proposal (required)
@@ -472,7 +503,7 @@ Guides you through executing a previewed trade safely.
 - "Execute the trade I just previewed"
 - "Place the trade with preview ID abc-123"
 
-**Safety:**
+**Note:**
 - Requires CAP_ALLOW_TRADING=true
 - Requires epic in allowlist
 - Preview must not be expired (2-minute TTL)
@@ -494,7 +525,70 @@ Guides you through analyzing your open positions and orders.
 - "Review my current positions"
 - "Analyze my portfolio exposure"
 
-**Safety:** This is a read-only workflow - no trades are executed.
+**Note:** This is a read-only workflow - no trades are executed.
+
+#### 5. `live_price_monitor` - Real-Time Price Tracking (WebSocket)
+Monitor live market prices with instant alerts when prices move beyond a threshold.
+
+**Parameters:**
+- `epics` - List of market EPICs to monitor (leave empty to search/select, max 40)
+- `duration_minutes` - How long to monitor (default: 5 minutes, max: 10 minutes)
+- `threshold_percent` - Alert when price moves > this % (default: 1.0%)
+
+**Workflow:**
+1. Select markets to monitor (or provide EPICs directly)
+2. Fetch initial prices to establish baseline
+3. Subscribe to real-time WebSocket price updates
+4. Display live price board with continuous updates
+5. Alert when any market moves > threshold_percent
+6. Auto-stop after duration_minutes
+
+**Example Usage:**
+- "Monitor GOLD and SILVER prices for 2 minutes"
+- "Watch BTC for next 5 minutes, alert on 2% moves"
+
+**Note:** Requires `CAP_WS_ENABLED=true`. Capital.com WebSocket sessions last 10 minutes maximum.
+
+#### 6. `real_time_alerts` - Conditional Price Alerts (WebSocket)
+Set price level alerts and get instant notifications when markets hit your targets.
+
+**Parameters:**
+- `alert_config` - Alert levels per EPIC (e.g., `{"GOLD": 2050.0, "SILVER": 28.5}`)
+- `duration_minutes` - Maximum monitoring duration (default: 5 minutes)
+- `auto_stop` - Stop monitoring after first alert? (default: true)
+
+**Workflow:**
+1. Configure alert conditions (price levels for each market)
+2. Subscribe to WebSocket price updates
+3. Monitor continuously for alert triggers
+4. Emit instant alert when condition met
+5. Optionally continue monitoring or stop after first alert
+
+**Example Usage:**
+- "Alert me when GOLD reaches 2050"
+- "Notify when SILVER drops below 28"
+
+**Note:** Requires `CAP_WS_ENABLED=true`.
+
+#### 7. `live_portfolio_monitor` - Real-Time P&L Tracking (WebSocket)
+Watch your portfolio P&L update in real-time as market prices move.
+
+**Parameters:**
+- `duration_minutes` - Monitoring duration (default: 5 minutes, max: 10 minutes)
+- `alert_pnl_threshold` - Alert when total P&L exceeds this amount (default: $100)
+
+**Workflow:**
+1. Fetch current open positions
+2. Subscribe to price updates for position markets
+3. Calculate live P&L as prices change
+4. Display real-time portfolio dashboard
+5. Alert when P&L crosses threshold
+
+**Example Usage:**
+- "Monitor my portfolio P&L for 5 minutes"
+- "Watch positions in real-time, alert at $500 P&L"
+
+**Note:** Requires `CAP_WS_ENABLED=true` and active positions.
 
 ### How to Use Prompts
 
@@ -514,7 +608,7 @@ User: "Show me my open positions"
 Claude: [Invokes position_review prompt, analyzes portfolio]
 ```
 
-Prompts provide structured guidance while maintaining safety controls throughout the workflow.
+Prompts provide structured guidance while maintaining trading controls throughout the workflow.
 
 ## MCP Resources (Read-Only Data)
 
@@ -560,9 +654,9 @@ Real-time server and session information.
 
 #### 2. `cap://risk-policy` - Risk Policy
 
-Comprehensive risk management configuration and safety controls.
+Comprehensive risk management configuration and trading controls.
 
-**Returns**: JSON with all validation layers, safety features, and trading restrictions
+**Returns**: JSON with all validation layers, trading control features, and trading restrictions
 
 **Example**:
 ```json
@@ -580,7 +674,7 @@ Comprehensive risk management configuration and safety controls.
     "2. Epic allowlist check (must be in ALLOWED_EPICS)",
     "... 10 total layers ..."
   ],
-  "safety_features": {
+  "execution_controls": {
     "preview_required": true,
     "deal_reference_matching": true,
     "authentication_required": true,
@@ -590,7 +684,7 @@ Comprehensive risk management configuration and safety controls.
 }
 ```
 
-**Use Cases**: Understand active safety controls, audit risk configuration, compliance documentation
+**Use Cases**: Understand active trading controls, audit risk configuration, compliance documentation
 
 ---
 
@@ -673,7 +767,7 @@ User: "Show me the server status"
 Claude: [Reads cap://status resource, displays server health]
 
 User: "What's the risk policy?"
-Claude: [Reads cap://risk-policy resource, explains safety controls]
+Claude: [Reads cap://risk-policy resource, explains trading controls]
 
 User: "Which markets can I trade?"
 Claude: [Reads cap://allowed-epics resource, lists permitted epics]
@@ -687,9 +781,9 @@ Claude: [Reads cap://market-cache/GOLD resource, shows market info]
 
 Resources provide a convenient way to inspect server state and configuration without running tools. For watchlist data, use the `cap_watchlists_list` and `cap_watchlists_get` tools.
 
-## Safety Model
+## Trade Execution Process
 
-### Two-Phase Execution
+### Mandatory Two-Step Execution
 All side-effect operations use a strict preview → execute flow:
 
 1. **Preview**: Validate trade against broker rules + local risk policy
@@ -702,7 +796,7 @@ All side-effect operations use a strict preview → execute flow:
    - Polls broker confirmation
    - Increments daily order counter
 
-### Risk Guardrails
+### Risk Controls
 - **Allowlist**: Only EPICs in `CAP_ALLOWED_EPICS` can be traded
 - **Size Limits**: Max position/order size enforced
 - **Position Limits**: Max open positions at any time
@@ -720,28 +814,21 @@ All side-effect operations use a strict preview → execute flow:
 
 MIT
 
-## **Disclaimer — Use of Capital.com Public API with Third-Party Tools**
+## Disclaimer – Use of Capital.com Public API with Third-Party Tools
 
-### Third-Party Integration
+#### Third-Party Integration
+This page describes how clients may connect the Capital.com Public API to third-party software, tools, or integrations, including those powered by artificial intelligence or large language models ('LLMs'). Any such third-party software, tool, or integration is independent of Capital.com and does not form part of Capital.com's services. Capital.com does not control, develop, endorse, or accept any liability for any third-party software, its functionality, outputs, or any outcomes arising from its use. Any use of third-party tools or integrations in connection with the Capital.com Public API is entirely at your own risk. You are responsible for reviewing the terms, privacy policies, and data-handling practices of any third-party tool you choose to use.
 
-This page describes how clients may connect the Capital.com Public API to third-party software, tools, or integrations, including those powered by artificial intelligence or large language models ("LLMs"). Any such third-party software, tool, or integration is independent of Capital.com and does not form part of Capital.com's services. Capital.com does not control, develop, endorse, or accept any liability for any third-party software, its functionality, outputs, or any outcomes arising from its use. Any use of third-party tools or integrations in connection with the Capital.com Public API is entirely at your own risk. You are responsible for reviewing the terms, privacy policies, and data-handling practices of any third-party tool you choose to use.
+#### Use of the Public API
+Your use of the Capital.com Public API is entirely at your own discretion and risk. Capital.com makes the Public API available for informational and trading purposes but does not recommend, endorse, or encourage any particular use, integration, or trading strategy. You are solely responsible for how you access and use the API, including the parameters of any orders submitted, the configuration of any connected tools or systems, and the interpretation of any data received. Capital.com accepts no liability for losses or unintended outcomes arising from your use of the API, whether accessed directly or through third-party tools. API availability, functionality, and specifications may be modified, rate-limited, suspended, or discontinued at any time without prior notice. Your use of the Public API is subject to Capital.com 's Terms and Conditions and Electronic Trading Terms, which you should read carefully before using the API.
 
-### Use of the Public API
-
-Your use of the Capital.com Public API is entirely at your own discretion and risk. Capital.com makes the Public API available for informational and trading purposes but does not recommend, endorse, or encourage any particular use, integration, or trading strategy. You are solely responsible for how you access and use the API, including the parameters of any orders submitted, the configuration of any connected tools or systems, and the interpretation of any data received. Capital.com accepts no liability for losses or unintended outcomes arising from your use of the API, whether accessed directly or through third-party tools. API availability, functionality, and specifications may be modified, rate-limited, suspended, or discontinued at any time without prior notice. Your use of the Public API is subject to Capital.com's Terms and Conditions and Electronic Trading Terms, which you should read carefully before using the API.
-
-### Execution-Only Service and No Investment Advice
-
+Execution-Only Service and No Investment Advice
 Capital.com provides its services on an execution-only basis. Trading financial instruments involves significant risk of loss. Nothing on this page, in the Public API, or in any third-party software or integration constitutes investment advice, a personal recommendation, or a solicitation to buy or sell any financial instrument. This includes any output, signal, suggestion, or analysis generated by AI, LLM-based, or other automated tools. All trading decisions, including any automated or algorithmic activity, are made at your own risk and remain your sole responsibility.
-
-### Risks of Automated and Algorithmic Trading
-
+Risks of Automated and Algorithmic Trading
 Use of the Public API in connection with automated or algorithmic trading tools carries additional risks, including but not limited to: rapid execution of orders without human review or intervention; system errors, software failures, or connectivity issues; execution at prices materially different from those expected; and unintended or erroneous orders resulting from misconfigured tools or parameters. Capital.com is not responsible for any losses arising from such risks or from the interaction between its systems and any third-party tools. Past performance and any outputs generated by automated tools are not indicative of future results.
 
-### Prohibited Use
-
+#### Prohibited Use
 Use of the Public API and any connected tools must not be used to manipulate the Capital.com platform, exploit pricing or latency, engage in market abuse, or obtain any unfair advantage. Capital.com reserves the right to restrict, suspend, or terminate API access and/or your account where it reasonably considers that such misuse has occurred or is likely to occur. Clients must not permit any third party to exercise discretionary control over their account.
 
-### Your Responsibilities
-
+#### Your Responsibilities
 You are responsible for ensuring that your use of the Capital.com platform, the Public API, and any third-party tools or integrations complies with Capital.com's Terms and Conditions, Electronic Trading Terms, and all applicable laws and regulations in your jurisdiction. You should carefully consider whether automated trading tools are appropriate for your circumstances, experience, and risk tolerance before using them. Capital.com strongly recommends that you test any automated tools or integrations thoroughly using a Demo account before connecting them to a live trading environment.

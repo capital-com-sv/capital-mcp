@@ -5,10 +5,13 @@ from typing import Any
 
 import httpx
 
+from . import __version__
 from .config import get_config
 from .errors import SessionError, UpstreamError, redact_secrets
 from .models import SessionTokens
 from .rate_limit import get_rate_limiter
+
+USER_AGENT = f"capital-com-mcp/{__version__}"
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,7 @@ class CapitalClient:
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json",
+                    "User-Agent": USER_AGENT,
                 },
             )
         return self._client
@@ -62,7 +66,7 @@ class CapitalClient:
             safe_kwargs = {
                 k: redact_secrets(v) if isinstance(v, dict) else v for k, v in kwargs.items()
             }
-            logger.debug(f"Request: {method} {url} {safe_kwargs}")
+            logger.debug(f"Request: {method} {url} UA={USER_AGENT} {safe_kwargs}")
 
     def _log_response(self, response: httpx.Response) -> None:
         """Log HTTP response (with secret redaction)."""
