@@ -1,0 +1,106 @@
+{
+  "manifest_version": "0.4",
+  "name": "capital-mcp",
+  "display_name": "Capital.com Public API MCP Server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Capital.com Open API — enabling safe, LLM-driven trading operations.",
+  "long_description": "A Python MCP server built with FastMCP 3.x that integrates with the Capital.com Open API. Provides tools for market data, account management, position tracking, and order execution via natural language. Uses STDIO transport and supports both demo and live trading environments.\n\nThis server requires valid Capital.com credentials. Always test with the demo environment before using in live trading.",
+  "author": {
+    "name": "Capital MCP Team",
+    "url": "https://capital.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capital-com-sv/capital-mcp"
+  },
+  "documentation": "https://github.com/capital-com-sv/capital-mcp/blob/main/USAGE.md",
+  "support": "https://github.com/capital-com-sv/capital-mcp/issues",
+  "license": "MIT",
+  "keywords": ["trading", "capital.com", "mcp", "finance", "markets", "api"],
+  "privacy_policies": [
+    "https://capital.com/privacy-policy"
+  ],
+  "server": {
+    "type": "uv",
+    "entry_point": "capital_mcp/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--script", "${__dirname}/capital_mcp/server.py"],
+      "env": {
+        "CAP_ENV": "${user_config.env}",
+        "CAP_API_KEY": "${user_config.api_key}",
+        "CAP_IDENTIFIER": "${user_config.identifier}",
+        "CAP_API_PASSWORD": "${user_config.password}",
+        "CAP_ALLOW_TRADING": "${user_config.allow_trading}",
+        "CAP_ALLOWED_EPICS": "${user_config.allowed_epics}",
+        "CAP_DRY_RUN": "${user_config.dry_run}",
+        "CAP_WS_ENABLED": "${user_config.ws_enabled}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "env": {
+      "type": "string",
+      "title": "Environment",
+      "description": "Trading environment: 'demo' for paper trading, 'live' for real money. Valid values: demo, live.",
+      "default": "demo",
+      "required": false
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Your Capital.com API key. Generate at: Settings > API integrations > Generate new key.",
+      "sensitive": true,
+      "required": true
+    },
+    "identifier": {
+      "type": "string",
+      "title": "Email (Identifier)",
+      "description": "Your Capital.com account email address used to log in.",
+      "required": true
+    },
+    "password": {
+      "type": "string",
+      "title": "API Password",
+      "description": "Your Capital.com API key custom password (not your platform login password).",
+      "sensitive": true,
+      "required": true
+    },
+    "allow_trading": {
+      "type": "boolean",
+      "title": "Allow Trading",
+      "description": "Enable trading operations. When false, only read-only tools (market data, account info) are available.",
+      "default": false,
+      "required": false
+    },
+    "allowed_epics": {
+      "type": "string",
+      "title": "Allowed EPICs",
+      "description": "Comma-separated list of instrument EPICs allowed for trading (e.g. SILVER,GOLD,BTCUSD). Use 'ALL' for unrestricted. Required when trading is enabled.",
+      "default": "",
+      "required": false
+    },
+    "dry_run": {
+      "type": "boolean",
+      "title": "Dry Run Mode",
+      "description": "When enabled, all trade executions are refused. Useful for testing the trading flow without real orders.",
+      "default": false,
+      "required": false
+    },
+    "ws_enabled": {
+      "type": "boolean",
+      "title": "Enable WebSocket Streaming",
+      "description": "Enable real-time price streaming tools via WebSocket. Sessions last 10 minutes max with auto-reconnect.",
+      "default": false,
+      "required": false
+    }
+  }
+}

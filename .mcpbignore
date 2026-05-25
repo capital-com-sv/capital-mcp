@@ -1,0 +1,46 @@
+# Virtual environments (uv type manages its own)
+venv/
+.venv/
+env/
+
+# Caches
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.py[codz]
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+.claude/
+
+# Git
+.git/
+
+# Env files (secrets)
+.env
+.mcp.json
+
+# CI/CD
+.gitlab-ci.yml
+
+# Bundled output
+*.mcpb
+
+# Non-essential docs
+IMPLEMENTATION_SUMMARY.md
+README_ORIGINAL.md
+sonar-project.properties
+.trivyignore.yml
+.python-version
+.DS_Store
