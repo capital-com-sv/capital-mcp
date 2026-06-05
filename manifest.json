@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "capital-mcp",
   "display_name": "Capital.com Public API MCP Server",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Model Context Protocol server for Capital.com Open API — enabling safe, LLM-driven trading operations.",
   "long_description": "A Python MCP server built with FastMCP 3.x that integrates with the Capital.com Open API. Provides tools for market data, account management, position tracking, and order execution via natural language. Uses STDIO transport and supports both demo and live trading environments.\n\nThis server requires valid Capital.com credentials. Always test with the demo environment before using in live trading.",
   "author": {
@@ -25,7 +25,7 @@
     "entry_point": "capital_mcp/server.py",
     "mcp_config": {
       "command": "uv",
-      "args": ["run", "--script", "${__dirname}/capital_mcp/server.py"],
+      "args": ["run", "--directory", "${__dirname}", "python", "-m", "capital_mcp.server"],
       "env": {
         "CAP_ENV": "${user_config.env}",
         "CAP_API_KEY": "${user_config.api_key}",

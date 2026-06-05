@@ -37,10 +37,18 @@ htmlcov/
 # Bundled output
 *.mcpb
 
-# Non-essential docs
+# Tests
+tests/
+
+# Internal files
+CLAUDE.md
 IMPLEMENTATION_SUMMARY.md
 README_ORIGINAL.md
 sonar-project.properties
 .trivyignore.yml
 .python-version
 .DS_Store
+gl-*.json
+port.yml
+logs/
+.sonar/
