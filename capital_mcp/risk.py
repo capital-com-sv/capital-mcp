@@ -19,6 +19,7 @@ from .models import (
     PreviewResult,
     PreviewWorkingOrderRequest,
     RiskCheck,
+    UpdateWorkingOrderRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -294,6 +295,187 @@ class RiskEngine:
             if request.good_till_date:
                 result.normalized_request["good_till_date"] = request.good_till_date
 
+        return result
+
+    async def _fetch_working_order(self, deal_id: str) -> dict[str, Any]:
+        """Fetch a single working order by dealId from GET /workingorders.
+
+        Returns the workingOrderData dict, or raises PreviewError if not found.
+        """
+        response = await self.client.get("/workingorders")
+        body = response.json()
+        orders = body.get("workingOrders", []) if isinstance(body, dict) else []
+        for item in orders:
+            data = item.get("workingOrderData", {}) if isinstance(item, dict) else {}
+            if data.get("dealId") == deal_id:
+                return data
+        raise PreviewError(f"Working order '{deal_id}' not found", code="ORDER_NOT_FOUND")
+
+    @staticmethod
+    def _resolve_scalar_field(
+        request: UpdateWorkingOrderRequest,
+        existing: dict[str, Any],
+        snake: str,
+        existing_key: str,
+        signed: bool,
+    ) -> Any:
+        """Return the override, the carried-forward existing value, or None.
+
+        GET returns stopDistance/profitDistance signed by direction; PUT rejects
+        negatives. Take abs() on those when carrying forward.
+        """
+        override = getattr(request, snake)
+        if override is not None:
+            return override
+        existing_value = existing.get(existing_key)
+        if existing_value is None:
+            return None
+        if signed and isinstance(existing_value, int | float):
+            return abs(existing_value)
+        return existing_value
+
+    @staticmethod
+    def _resolve_time_in_force(request: UpdateWorkingOrderRequest, existing: dict[str, Any]) -> str:
+        """Resolve effective timeInForce — override > existing > default GTC.
+
+        The upstream wipes the expiry to GOOD_TILL_CANCELLED when timeInForce
+        is omitted from the PUT body, so the field must always be present.
+        """
+        if request.time_in_force is not None:
+            return request.time_in_force.value
+        return existing.get("timeInForce") or "GOOD_TILL_CANCELLED"
+
+    @staticmethod
+    def _resolve_good_till_date(
+        request: UpdateWorkingOrderRequest, existing: dict[str, Any]
+    ) -> str | None:
+        """Resolve goodTillDate carry-forward from goodTillDateUTC.
+
+        Reading from the local-time goodTillDate would drift by the tz offset
+        on every update — the canonical UTC field is goodTillDateUTC.
+        """
+        if request.good_till_date is not None:
+            return request.good_till_date
+        utc = existing.get("goodTillDateUTC")
+        return utc if utc is not None else None
+
+    @staticmethod
+    def _build_update_payload(
+        request: UpdateWorkingOrderRequest,
+        existing: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build the broker payload for a working-order update.
+
+        PUT replaces the resource — any field missing from the body is wiped
+        by Capital.com. Carry forward scalar fields from the existing order
+        when the caller did not override them. (GET /workingorders does not
+        return stopAmount/profitAmount, so those cannot be carried forward
+        and must be re-supplied by the caller or they will be lost.)
+        """
+        guaranteed = request.guaranteed_stop
+        if guaranteed is None:
+            guaranteed = bool(existing.get("guaranteedStop", False))
+        trailing = request.trailing_stop
+        if trailing is None:
+            trailing = bool(existing.get("trailingStop", False))
+
+        payload: dict[str, Any] = {
+            "guaranteedStop": guaranteed,
+            "trailingStop": trailing,
+            "timeInForce": RiskEngine._resolve_time_in_force(request, existing),
+        }
+
+        for snake, camel, existing_key, signed in (
+            ("level", "level", "orderLevel", False),
+            ("stop_level", "stopLevel", "stopLevel", False),
+            ("stop_distance", "stopDistance", "stopDistance", True),
+            ("profit_level", "profitLevel", "profitLevel", False),
+            ("profit_distance", "profitDistance", "profitDistance", True),
+        ):
+            value = RiskEngine._resolve_scalar_field(request, existing, snake, existing_key, signed)
+            if value is not None:
+                payload[camel] = value
+
+        if payload["timeInForce"] == "GOOD_TILL_DATE":
+            gtd = RiskEngine._resolve_good_till_date(request, existing)
+            if gtd is not None:
+                payload["goodTillDate"] = gtd
+
+        for snake, camel in (("stop_amount", "stopAmount"), ("profit_amount", "profitAmount")):
+            override = getattr(request, snake)
+            if override is not None:
+                payload[camel] = override
+
+        return payload
+
+    async def preview_working_order_update(
+        self, request: UpdateWorkingOrderRequest
+    ) -> PreviewResult:
+        """Preview an update to a pending working order.
+
+        Carries forward existing guaranteed_stop / trailing_stop values
+        because Capital.com resets omitted flags to false.
+        """
+        existing = await self._fetch_working_order(request.deal_id)
+
+        checks: list[RiskCheck] = []
+
+        # Check 1: Trading enabled
+        if not self.config.cap_allow_trading:
+            checks.append(
+                RiskCheck(
+                    check="trading_enabled",
+                    passed=False,
+                    message="Trading is disabled (CAP_ALLOW_TRADING=false)",
+                )
+            )
+            return PreviewResult(normalized_request={}, checks=checks, all_checks_passed=False)
+        checks.append(RiskCheck(check="trading_enabled", passed=True, message="Trading is enabled"))
+
+        # Check 2: Epic allowlist (epic comes from existing order — caller cannot change it via PUT)
+        existing_epic = str(existing.get("epic", ""))
+        if not self.config.is_epic_allowed(existing_epic):
+            checks.append(
+                RiskCheck(
+                    check="epic_allowed",
+                    passed=False,
+                    message=f"Epic '{existing_epic}' not in allowlist",
+                )
+            )
+            return PreviewResult(normalized_request={}, checks=checks, all_checks_passed=False)
+        epic = existing_epic.upper()
+        checks.append(
+            RiskCheck(check="epic_allowed", passed=True, message=f"Epic '{epic}' is allowed")
+        )
+
+        # Check 3: Daily order limit
+        daily_check = self._check_daily_limit()
+        checks.append(daily_check)
+        if not daily_check.passed:
+            return PreviewResult(normalized_request={}, checks=checks, all_checks_passed=False)
+
+        broker_payload = self._build_update_payload(request, existing)
+
+        normalized_request: dict[str, Any] = {
+            "deal_id": request.deal_id,
+            "epic": epic,
+            "broker_payload": broker_payload,
+        }
+
+        result = PreviewResult(
+            normalized_request=normalized_request,
+            checks=checks,
+            all_checks_passed=all(c.passed for c in checks),
+            estimated_risk_notes=(
+                "Update preview only; omitted fields carried forward from existing order. "
+                "stop_amount / profit_amount cannot be carried forward — re-supply them "
+                "explicitly if previously set."
+            ),
+        )
+        self._preview_cache[result.preview_id] = result
+        logger.info(
+            f"Created update preview {result.preview_id} for working order {request.deal_id}"
+        )
         return result
 
     def get_preview(self, preview_id: str) -> PreviewResult:

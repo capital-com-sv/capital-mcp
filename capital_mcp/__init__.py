@@ -1,3 +1,5 @@
 """Capital.com MCP Server - Model Context Protocol server for Capital.com Open API."""
 
-__version__ = "0.2.1"
+from importlib.metadata import version as _pkg_version
+
+__version__ = _pkg_version("capital-mcp")

@@ -242,6 +242,10 @@ class CapitalClient:
             max_retries=1,  # No retries for PUTs
         )
 
+    async def update_working_order(self, deal_id: str, payload: dict[str, Any]) -> httpx.Response:
+        """PUT /workingorders/{dealId} — amend a pending working order."""
+        return await self.put(f"/workingorders/{deal_id}", json=payload)
+
     async def delete(self, path: str) -> httpx.Response:
         """Make DELETE request."""
         return await self.request(

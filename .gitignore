@@ -150,6 +150,9 @@ activemq-data/
 # MCP config (contains credentials)
 .mcp.json
 
+# MCPB bundle (built fresh by CI before publish)
+*.mcpb
+
 # Environments
 .env
 .envrc
@@ -217,3 +220,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+.claude/tmp

@@ -1,0 +1,29 @@
+{
+  "name": "capital-com-mcp",
+  "version": "0.3.0",
+  "description": "Capital.com MCP Server — LLM-driven access to your Capital.com trading account. Supports market data, account management, position tracking, order execution, and real-time streaming via the Capital.com Open API.",
+  "author": {
+    "name": "Capital MCP Team",
+    "email": "support@capital.com"
+  },
+  "homepage": "https://github.com/capital-com-sv/capital-mcp",
+  "repository": "https://github.com/capital-com-sv/capital-mcp",
+  "license": "MIT",
+  "keywords": ["trading", "capital.com", "finance", "markets", "mcp", "api"],
+  "mcpServers": {
+    "capital-com": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "capital_mcp.server"],
+      "env": {
+        "CAP_ENV": "demo",
+        "CAP_API_KEY": "",
+        "CAP_IDENTIFIER": "",
+        "CAP_API_PASSWORD": "",
+        "CAP_ALLOW_TRADING": "false",
+        "CAP_ALLOWED_EPICS": "",
+        "CAP_DRY_RUN": "false",
+        "CAP_WS_ENABLED": "false"
+      }
+    }
+  }
+}

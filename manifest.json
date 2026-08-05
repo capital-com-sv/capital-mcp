@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "capital-mcp",
   "display_name": "Capital.com Public API MCP Server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Model Context Protocol server for Capital.com Open API — enabling safe, LLM-driven trading operations.",
   "long_description": "A Python MCP server built with FastMCP 3.x that integrates with the Capital.com Open API. Provides tools for market data, account management, position tracking, and order execution via natural language. Uses STDIO transport and supports both demo and live trading environments.\n\nThis server requires valid Capital.com credentials. Always test with the demo environment before using in live trading.",
   "author": {
@@ -16,9 +16,10 @@
   "documentation": "https://github.com/capital-com-sv/capital-mcp/blob/main/USAGE.md",
   "support": "https://github.com/capital-com-sv/capital-mcp/issues",
   "license": "MIT",
+  "icon": "logo.png",
   "keywords": ["trading", "capital.com", "mcp", "finance", "markets", "api"],
   "privacy_policies": [
-    "https://capital.com/privacy-policy"
+    "https://github.com/capital-com-sv/capital-mcp/blob/main/README.md#privacy-policy"
   ],
   "server": {
     "type": "uv",

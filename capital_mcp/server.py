@@ -1,6 +1,9 @@
 """MCP Server for Capital.com Open API - FastMCP Implementation."""
 
 import logging
+import re
+from datetime import datetime, timedelta, timezone
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 from fastmcp import FastMCP
@@ -13,6 +16,8 @@ from .models import (
     Direction,
     PreviewPositionRequest,
     PreviewWorkingOrderRequest,
+    TimeInForce,
+    UpdateWorkingOrderRequest,
     WorkingOrderType,
 )
 from .risk import get_risk_engine
@@ -21,13 +26,25 @@ from .utils import poll_until
 
 logger = logging.getLogger(__name__)
 
+
+def _clamp_to_date(to_date: str) -> str:
+    now = datetime.now(timezone.utc)
+    dt = datetime.fromisoformat(to_date)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    if dt > now:
+        return now.strftime("%Y-%m-%dT%H:%M:%S")
+    return to_date
+
+
 # String constants
+ACTIVITY_HISTORY_PATH = "/history/activity"
 POSITIONS_PATH = "/positions"
 CONFIRM_REQUIRED_MESSAGE = "Explicit confirmation required. Set confirm=true"
 CONFIRMATION_TIMEOUT_MESSAGE = "Confirmation timed out"
 
 # Initialize FastMCP server
-mcp = FastMCP("Capital.com MCP Server")
+mcp = FastMCP("Capital.com MCP Server", version=_pkg_version("capital-mcp"))
 mcp.add_middleware(ErrorHandlerMiddleware())
 
 
@@ -36,7 +53,9 @@ mcp.add_middleware(ErrorHandlerMiddleware())
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Check Session Status", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_session_status() -> dict[str, Any]:
     """
     Get current session status.
@@ -49,7 +68,7 @@ async def cap_session_status() -> dict[str, Any]:
     return status.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "Log In", "readOnlyHint": False, "destructiveHint": False})
 async def cap_session_login(force: bool = False, account_id: str | None = None) -> dict[str, Any]:
     """
     Create a new session or verify existing session.
@@ -67,7 +86,9 @@ async def cap_session_login(force: bool = False, account_id: str | None = None) 
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Keep Session Alive", "readOnlyHint": False, "destructiveHint": False}
+)
 async def cap_session_ping() -> dict[str, Any]:
     """
     Keep session alive.
@@ -82,7 +103,7 @@ async def cap_session_ping() -> dict[str, Any]:
     return data
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "Log Out", "readOnlyHint": False, "destructiveHint": False})
 async def cap_session_logout() -> dict[str, str]:
     """
     End session and clear authentication tokens.
@@ -99,12 +120,34 @@ async def cap_session_logout() -> dict[str, str]:
 # ============================================================
 
 
-@mcp.tool()
+_EPIC_PATTERN = re.compile(r"[A-Z0-9]{2,15}")
+
+
+def _market_summary_from_detail(detail: dict[str, Any]) -> dict[str, Any]:
+    """Convert /markets/{epic} response to a search-result-shaped dict."""
+    inst = detail.get("instrument", {})
+    snap = detail.get("snapshot", {})
+    return {
+        "instrumentName": inst.get("name", ""),
+        "epic": inst.get("epic", ""),
+        "symbol": inst.get("symbol", ""),
+        "instrumentType": inst.get("type", ""),
+        "marketStatus": snap.get("marketStatus", ""),
+        "bid": snap.get("bid"),
+        "offer": snap.get("offer"),
+        "percentageChange": snap.get("percentageChange"),
+        "streamingPricesAvailable": inst.get("streamingPricesAvailable", False),
+    }
+
+
+@mcp.tool(annotations={"title": "Search Markets", "readOnlyHint": True, "destructiveHint": False})
 async def cap_market_search(
     search_term: str | None = None, epics: list[str] | None = None, limit: int = 50
 ) -> dict[str, Any]:
     """
     Search for markets by term or EPICs.
+
+    If search_term looks like an EPIC and matches nothing, the server retries as an epic lookup.
 
     Args:
         search_term: Search term (e.g., "Bitcoin", "BTC") (optional)
@@ -112,6 +155,7 @@ async def cap_market_search(
         limit: Max results (default: 50, max: 1000)
 
     Returns list of matching markets with details.
+    Fallback responses include a "resolution" field set to "epic_fallback".
     Requires authentication.
     """
     session = get_session_manager()
@@ -131,10 +175,31 @@ async def cap_market_search(
     if "markets" in data and len(data["markets"]) > limit:
         data["markets"] = data["markets"][:limit]
 
+    if (
+        search_term
+        and not epics
+        and not data.get("markets")
+        and _EPIC_PATTERN.fullmatch(search_term.strip().upper())
+    ):
+        epic_candidate = search_term.strip().upper()
+        try:
+            fallback_resp = await client.get(f"/markets/{epic_candidate}")
+            fallback_data: dict[str, Any] = fallback_resp.json()
+            if fallback_data.get("instrument"):
+                return {
+                    "markets": [_market_summary_from_detail(fallback_data)],
+                    "resolution": "epic_fallback",
+                }
+        except Exception:  # NOSONAR fallback is best-effort; primary search already returned empty
+            logger.debug("Epic fallback failed for %s", epic_candidate, exc_info=True)
+        return {"markets": [], "hint": "Try cap_market_get(epic=...) if you know the EPIC"}
+
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Market Details", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_market_get(epic: str) -> dict[str, Any]:
     """
     Get detailed market information including dealing rules.
@@ -154,7 +219,13 @@ async def cap_market_get(epic: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Browse Market Categories",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+)
 async def cap_market_navigation_root() -> dict[str, Any]:
     """
     Get root market navigation tree.
@@ -171,7 +242,9 @@ async def cap_market_navigation_root() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Browse Market Category", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_market_navigation_node(node_id: str) -> dict[str, Any]:
     """
     Get market navigation node details.
@@ -191,7 +264,9 @@ async def cap_market_navigation_node(node_id: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Market Prices", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_market_prices(
     epic: str,
     resolution: str = "MINUTE_15",
@@ -230,7 +305,9 @@ async def cap_market_prices(
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Market Sentiment", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_market_sentiment(market_id: str) -> dict[str, Any]:
     """
     Get client sentiment for a market.
@@ -255,7 +332,7 @@ async def cap_market_sentiment(market_id: str) -> dict[str, Any]:
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "List Accounts", "readOnlyHint": True, "destructiveHint": False})
 async def cap_account_list() -> dict[str, Any]:
     """
     List all trading accounts.
@@ -273,7 +350,9 @@ async def cap_account_list() -> dict[str, Any]:
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Account Preferences", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_account_preferences_get() -> dict[str, Any]:
     """
     Get account preferences.
@@ -290,7 +369,13 @@ async def cap_account_preferences_get() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Update Account Preferences",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+    }
+)
 async def cap_account_preferences_set(
     hedging_mode: bool | None = None,
     leverages: dict[str, int | None] | None = None,
@@ -330,9 +415,15 @@ async def cap_account_preferences_set(
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Get Account Activity",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+)
 async def cap_account_history_activity(
-    from_date: str | None = None, to_date: str | None = None, last_period: int = 600
+    from_date: str | None = None, to_date: str | None = None
 ) -> dict[str, Any]:
     """
     Get account activity history.
@@ -340,31 +431,61 @@ async def cap_account_history_activity(
     Args:
         from_date: Start date ISO 8601 (optional)
         to_date: End date ISO 8601 (optional)
-        last_period: Last N seconds (default: 600, max: 86400 for 1 day)
 
-    Returns recent account activity including deals, orders, and updates.
+    When both dates are provided, supports ranges up to 90 days.
+    Without dates, returns last 10 minutes of activity.
     Requires authentication.
     """
     session = get_session_manager()
     await session.ensure_logged_in()
-
-    params: dict[str, Any] = {"lastPeriod": last_period}
-    if from_date:
-        params["from"] = from_date
-    if to_date:
-        params["to"] = to_date
-
     client = get_client()
-    response = await client.get("/history/activity", params=params)
-    result: dict[str, Any] = response.json()
-    return result
+
+    if not from_date or not to_date:
+        params: dict[str, Any] = {}
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = _clamp_to_date(to_date)
+        response = await client.get(ACTIVITY_HISTORY_PATH, params=params)
+        result: dict[str, Any] = response.json()
+        return result
+
+    to_date = _clamp_to_date(to_date)
+    start = datetime.fromisoformat(from_date)
+    end = datetime.fromisoformat(to_date)
+    if (end - start).days > 90:
+        from capital_mcp.errors import CapitalMCPError, ErrorCode
+
+        raise CapitalMCPError(
+            code=ErrorCode.INVALID_REQUEST,
+            message="Date range cannot exceed 90 days",
+        )
+
+    if (end - start).total_seconds() <= 86400:
+        params = {"from": from_date, "to": to_date}
+        response = await client.get(ACTIVITY_HISTORY_PATH, params=params)
+        result = response.json()
+        return result
+
+    all_activities: list[dict[str, Any]] = []
+    chunk_start = start
+    while chunk_start < end:
+        chunk_end = min(chunk_start + timedelta(days=1), end)
+        params = {"from": chunk_start.isoformat(), "to": chunk_end.isoformat()}
+        response = await client.get(ACTIVITY_HISTORY_PATH, params=params)
+        data = response.json()
+        all_activities.extend(data.get("activities", []))
+        chunk_start = chunk_end
+
+    return {"activities": all_activities}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Transaction History", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_account_history_transactions(
     from_date: str | None = None,
     to_date: str | None = None,
-    last_period: int = 600,
     type: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -373,20 +494,19 @@ async def cap_account_history_transactions(
     Args:
         from_date: Start date ISO 8601 (optional)
         to_date: End date ISO 8601 (optional)
-        last_period: Last N seconds (default: 600)
         type: Transaction type filter (optional)
 
-    Returns transaction history including deposits, withdrawals, and P&L.
+    Without dates, returns last 10 minutes of transactions.
     Requires authentication.
     """
     session = get_session_manager()
     await session.ensure_logged_in()
 
-    params: dict[str, Any] = {"lastPeriod": last_period}
+    params: dict[str, Any] = {}
     if from_date:
         params["from"] = from_date
     if to_date:
-        params["to"] = to_date
+        params["to"] = _clamp_to_date(to_date)
     if type:
         params["type"] = type
 
@@ -396,7 +516,9 @@ async def cap_account_history_transactions(
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Top Up Demo Account", "readOnlyHint": False, "destructiveHint": False}
+)
 async def cap_account_demo_topup(amount: float, confirm: bool = False) -> dict[str, Any]:
     """
     Top up demo account balance (DEMO ONLY).
@@ -477,7 +599,9 @@ async def _wait_for_confirmation(
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "List Open Positions", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_positions_list() -> dict[str, Any]:
     """
     List all open positions.
@@ -494,7 +618,9 @@ async def cap_trade_positions_list() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Position Details", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_positions_get(deal_id: str) -> dict[str, Any]:
     """
     Get position details by deal ID.
@@ -514,7 +640,9 @@ async def cap_trade_positions_get(deal_id: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "List Working Orders", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_orders_list() -> dict[str, Any]:
     """
     List all working orders.
@@ -531,7 +659,9 @@ async def cap_trade_orders_list() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Get Trade Confirmation", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_confirm_get(deal_reference: str) -> dict[str, Any]:
     """
     Get deal confirmation status.
@@ -552,7 +682,13 @@ async def cap_trade_confirm_get(deal_reference: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Wait for Trade Confirmation",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+)
 async def cap_trade_confirm_wait(
     deal_reference: str, timeout_s: float = 15.0, poll_interval_ms: int = 500
 ) -> dict[str, Any]:
@@ -576,7 +712,9 @@ async def cap_trade_confirm_wait(
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Preview CFD Position", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_preview_position(
     epic: str,
     direction: str,
@@ -649,7 +787,9 @@ async def cap_trade_preview_position(
     }
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Preview Working Order", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_trade_preview_working_order(  # NOSONAR flat signature is idiomatic for MCP tools — nested schemas are harder for LLMs to construct
     epic: str,
     direction: str,
@@ -683,7 +823,7 @@ async def cap_trade_preview_working_order(  # NOSONAR flat signature is idiomati
         profit_level: Take profit price level (optional)
         profit_distance: Take profit distance from entry (optional)
         profit_amount: Take profit amount (optional)
-        good_till_date: Expiry date ISO 8601 (optional)
+        good_till_date: Expiry date in ISO 8601 UTC (e.g. 2026-08-15T14:30:00) (optional)
 
     Similar validation to preview_position plus order-specific checks.
     Returns preview_id for use with cap_trade_execute_working_order.
@@ -724,12 +864,93 @@ async def cap_trade_preview_working_order(  # NOSONAR flat signature is idiomati
     }
 
 
+@mcp.tool(
+    annotations={"title": "Preview Order Update", "readOnlyHint": True, "destructiveHint": False}
+)
+async def cap_trade_preview_working_order_update(  # NOSONAR flat signature is idiomatic for MCP tools — nested schemas are harder for LLMs to construct
+    deal_id: str,
+    level: float | None = None,
+    stop_level: float | None = None,
+    stop_distance: float | None = None,
+    stop_amount: float | None = None,
+    profit_level: float | None = None,
+    profit_distance: float | None = None,
+    profit_amount: float | None = None,
+    good_till_date: str | None = None,
+    time_in_force: str | None = None,
+    guaranteed_stop: bool | None = None,
+    trailing_stop: bool | None = None,
+) -> dict[str, Any]:
+    """
+    Preview an update to a pending working order (NO SIDE EFFECTS).
+
+    Args:
+        deal_id: Deal ID of the working order to amend
+        level: New trigger price (optional)
+        stop_level: New stop loss price level (optional)
+        stop_distance: New stop loss distance (optional)
+        stop_amount: New stop loss amount (optional)
+        profit_level: New take profit price level (optional)
+        profit_distance: New take profit distance (optional)
+        profit_amount: New take profit amount (optional)
+        good_till_date: New expiry in ISO 8601 UTC format (e.g. 2026-08-15T14:30:00) (optional)
+        time_in_force: GOOD_TILL_CANCELLED or GOOD_TILL_DATE. Pass
+            GOOD_TILL_CANCELLED to clear an existing expiry. None preserves
+            the existing value.
+        guaranteed_stop: Override guaranteed stop flag (None = carry forward existing)
+        trailing_stop: Override trailing stop flag (None = carry forward existing)
+
+    The server reads the existing order and carries forward guaranteed_stop and
+    trailing_stop when omitted (the broker resets those flags to false otherwise).
+    Other fields (level, stop_level, stop_distance, profit_level, profit_distance,
+    good_till_date, time_in_force) are preserved by the broker when omitted, so
+    they are only sent when explicitly overridden. Epic and size are not
+    amendable via this endpoint. stop_amount / profit_amount cannot be carried
+    forward — re-supply them explicitly if previously set.
+
+    Returns preview_id for use with cap_trade_execute_working_order_update.
+
+    Requires authentication.
+    """
+    session = get_session_manager()
+    await session.ensure_logged_in()
+
+    request = UpdateWorkingOrderRequest(
+        deal_id=deal_id,
+        level=level,
+        stop_level=stop_level,
+        stop_distance=stop_distance,
+        stop_amount=stop_amount,
+        profit_level=profit_level,
+        profit_distance=profit_distance,
+        profit_amount=profit_amount,
+        good_till_date=good_till_date,
+        time_in_force=TimeInForce(time_in_force) if time_in_force else None,
+        guaranteed_stop=guaranteed_stop,
+        trailing_stop=trailing_stop,
+    )
+
+    risk = get_risk_engine()
+    preview = await risk.preview_working_order_update(request)
+
+    return {
+        "preview_id": preview.preview_id,
+        "normalized_request": preview.normalized_request,
+        "checks": [c.model_dump() for c in preview.checks],
+        "all_checks_passed": preview.all_checks_passed,
+        "estimated_risk_notes": preview.estimated_risk_notes,
+        "expires_in_seconds": 120,
+    }
+
+
 # ============================================================
 # Trading Tools - Execute (Side Effects, Heavily Guarded)
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Execute CFD Position", "readOnlyHint": False, "destructiveHint": True}
+)
 async def cap_trade_execute_position(
     preview_id: str, confirm: bool = False, wait_for_confirm: bool = True, timeout_s: float = 15.0
 ) -> dict[str, Any]:
@@ -818,7 +1039,9 @@ async def cap_trade_execute_position(
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Execute Working Order", "readOnlyHint": False, "destructiveHint": True}
+)
 async def cap_trade_execute_working_order(
     preview_id: str, confirm: bool = False, wait_for_confirm: bool = True, timeout_s: float = 15.0
 ) -> dict[str, Any]:
@@ -901,7 +1124,60 @@ async def cap_trade_execute_working_order(
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Update Working Order", "readOnlyHint": False, "destructiveHint": True}
+)
+async def cap_trade_execute_working_order_update(
+    preview_id: str, confirm: bool = False, wait_for_confirm: bool = True, timeout_s: float = 15.0
+) -> dict[str, Any]:
+    """
+    Execute an amendment to a pending working order (SIDE EFFECT - MODIFIES ORDER).
+
+    Args:
+        preview_id: Preview ID from cap_trade_preview_working_order_update
+        confirm: Explicit confirmation (default: false)
+        wait_for_confirm: Wait for broker confirmation (default: true)
+        timeout_s: Confirmation timeout (default: 15.0)
+
+    Same safety guards as execute_working_order. The broker payload was
+    built during preview with guaranteed_stop / trailing_stop carried
+    forward from the existing order.
+
+    Requires authentication.
+    """
+    session = get_session_manager()
+    await session.ensure_logged_in()
+
+    risk = get_risk_engine()
+    risk.validate_execution_guards(confirm=confirm, preview_id=preview_id)
+
+    preview = risk.get_preview(preview_id)
+    normalized = preview.normalized_request
+    deal_id = normalized["deal_id"]
+    broker_payload = normalized["broker_payload"]
+
+    client = get_client()
+    response = await client.update_working_order(deal_id, broker_payload)
+    data: dict[str, Any] = response.json()
+
+    risk.consume_preview(preview_id)
+    risk.increment_order_count()
+
+    if wait_for_confirm and "dealReference" in data:
+        try:
+            confirm_data = await _wait_for_confirmation(
+                deal_reference=data["dealReference"],
+                timeout_s=timeout_s,
+            )
+            data["confirmation"] = confirm_data
+        except TimeoutError:
+            data["confirmation"] = {"status": "TIMEOUT", "message": CONFIRMATION_TIMEOUT_MESSAGE}
+
+    data["active_account_id"] = session.account_id
+    return data
+
+
+@mcp.tool(annotations={"title": "Close Position", "readOnlyHint": False, "destructiveHint": True})
 async def cap_trade_positions_close(
     deal_id: str, confirm: bool = False, wait_for_confirm: bool = True, timeout_s: float = 15.0
 ) -> dict[str, Any]:
@@ -944,7 +1220,9 @@ async def cap_trade_positions_close(
     return data
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Cancel Working Order", "readOnlyHint": False, "destructiveHint": True}
+)
 async def cap_trade_orders_cancel(
     deal_id: str, confirm: bool = False, wait_for_confirm: bool = True, timeout_s: float = 15.0
 ) -> dict[str, Any]:
@@ -992,7 +1270,7 @@ async def cap_trade_orders_cancel(
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "List Watchlists", "readOnlyHint": True, "destructiveHint": False})
 async def cap_watchlists_list() -> dict[str, Any]:
     """
     List all watchlists.
@@ -1009,7 +1287,7 @@ async def cap_watchlists_list() -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "Get Watchlist", "readOnlyHint": True, "destructiveHint": False})
 async def cap_watchlists_get(watchlist_id: str) -> dict[str, Any]:
     """
     Get watchlist details including markets.
@@ -1029,7 +1307,9 @@ async def cap_watchlists_get(watchlist_id: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Create Watchlist", "readOnlyHint": False, "destructiveHint": False}
+)
 async def cap_watchlists_create(name: str, confirm: bool = False) -> dict[str, Any]:
     """
     Create a new watchlist.
@@ -1054,7 +1334,13 @@ async def cap_watchlists_create(name: str, confirm: bool = False) -> dict[str, A
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Add to Watchlist",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+    }
+)
 async def cap_watchlists_add_market(
     watchlist_id: str, epic: str, confirm: bool = False
 ) -> dict[str, Any]:
@@ -1082,7 +1368,7 @@ async def cap_watchlists_add_market(
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations={"title": "Delete Watchlist", "readOnlyHint": False, "destructiveHint": True})
 async def cap_watchlists_delete(watchlist_id: str, confirm: bool = False) -> dict[str, Any]:
     """
     Delete a watchlist.
@@ -1106,7 +1392,13 @@ async def cap_watchlists_delete(watchlist_id: str, confirm: bool = False) -> dic
     return response.json() if response.text else {"status": "deleted"}
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Remove from Watchlist",
+        "readOnlyHint": False,
+        "destructiveHint": False,
+    }
+)
 async def cap_watchlists_remove_market(
     watchlist_id: str, epic: str, confirm: bool = False
 ) -> dict[str, Any]:
@@ -1138,7 +1430,9 @@ async def cap_watchlists_remove_market(
 # ============================================================
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Stream Live Prices", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_stream_prices(
     epics: list[str], duration_s: float = 300.0, update_interval_s: float = 1.0
 ) -> dict[str, Any]:
@@ -1214,7 +1508,9 @@ async def cap_stream_prices(
         }
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={"title": "Stream Price Alerts", "readOnlyHint": True, "destructiveHint": False}
+)
 async def cap_stream_alerts(
     alerts: dict[str, Any], duration_s: float = 300.0, auto_close: bool = False
 ) -> dict[str, Any]:
@@ -1325,7 +1621,13 @@ async def cap_stream_alerts(
         }
 
 
-@mcp.tool()
+@mcp.tool(
+    annotations={
+        "title": "Stream Portfolio Updates",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+    }
+)
 async def cap_stream_portfolio(
     duration_s: float = 300.0, update_interval_s: float = 5.0
 ) -> dict[str, Any]:

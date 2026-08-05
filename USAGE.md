@@ -233,19 +233,21 @@ Any MCP client supporting STDIO transport can use this server:
 | `cap_trade_confirm_get` | Get deal confirmation status | Yes |
 | `cap_trade_confirm_wait` | Wait for confirmation with polling | Yes |
 
-### Trading - Preview (2 tools, SAFE)
+### Trading - Preview (3 tools, SAFE)
 
 | Tool | Description | Auth Required |
 |------|-------------|---------------|
 | `cap_trade_preview_position` | Preview position (NO SIDE EFFECTS) | Yes |
 | `cap_trade_preview_working_order` | Preview working order (NO SIDE EFFECTS) | Yes |
+| `cap_trade_preview_working_order_update` | Preview working order update (NO SIDE EFFECTS) | Yes |
 
-### Trading - Execute (7 tools, DANGEROUS)
+### Trading - Execute (5 tools, DANGEROUS)
 
 | Tool | Description | Auth Required | Trading Gated |
 |------|-------------|---------------|---------------|
 | `cap_trade_execute_position` | Execute position (CREATES TRADE) | Yes | Yes |
 | `cap_trade_execute_working_order` | Execute order (CREATES ORDER) | Yes | Yes |
+| `cap_trade_execute_working_order_update` | Amend order (MODIFIES ORDER) | Yes | Yes |
 | `cap_trade_positions_close` | Close position (CLOSES TRADE) | Yes | Yes |
 | `cap_trade_orders_cancel` | Cancel order (CANCELS ORDER) | Yes | Yes |
 

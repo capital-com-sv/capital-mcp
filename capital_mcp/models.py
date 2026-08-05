@@ -5,11 +5,32 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _validate_iso_good_till_date(value: str | None) -> str | None:
+    """Reject non-ISO 8601 values upfront so the LLM sees the error before
+    a preview-confirm round-trip ends with HTTP 400 from the broker."""
+    if value is None:
+        return value
+    try:
+        datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"good_till_date must be ISO 8601 UTC (e.g. 2026-08-15T14:30:00); got {value!r}"
+        ) from exc
+    return value
+
 
 # Field description constants
 EPIC_DESCRIPTION = "Market EPIC"
 CONFIRM_DESCRIPTION = "Explicit confirmation"
+DESC_STOP_LEVEL = "Stop loss level"
+DESC_STOP_DISTANCE = "Stop loss distance"
+DESC_STOP_AMOUNT = "Stop loss amount"
+DESC_PROFIT_LEVEL = "Take profit level"
+DESC_PROFIT_DISTANCE = "Take profit distance"
+DESC_PROFIT_AMOUNT = "Take profit amount"
 
 # ============================================================
 # Enums
@@ -28,6 +49,13 @@ class WorkingOrderType(str, Enum):
 
     LIMIT = "LIMIT"
     STOP = "STOP"
+
+
+class TimeInForce(str, Enum):
+    """Working order time-in-force."""
+
+    GOOD_TILL_CANCELLED = "GOOD_TILL_CANCELLED"
+    GOOD_TILL_DATE = "GOOD_TILL_DATE"
 
 
 class PriceResolution(str, Enum):
@@ -163,12 +191,12 @@ class PreviewPositionRequest(BaseModel):
     size: float = Field(..., gt=0, description="Position size")
     guaranteed_stop: bool = Field(default=False, description="Use guaranteed stop")
     trailing_stop: bool = Field(default=False, description="Use trailing stop")
-    stop_level: float | None = Field(default=None, description="Stop loss level")
-    stop_distance: float | None = Field(default=None, description="Stop loss distance")
-    stop_amount: float | None = Field(default=None, description="Stop loss amount")
-    profit_level: float | None = Field(default=None, description="Take profit level")
-    profit_distance: float | None = Field(default=None, description="Take profit distance")
-    profit_amount: float | None = Field(default=None, description="Take profit amount")
+    stop_level: float | None = Field(default=None, description=DESC_STOP_LEVEL)
+    stop_distance: float | None = Field(default=None, description=DESC_STOP_DISTANCE)
+    stop_amount: float | None = Field(default=None, description=DESC_STOP_AMOUNT)
+    profit_level: float | None = Field(default=None, description=DESC_PROFIT_LEVEL)
+    profit_distance: float | None = Field(default=None, description=DESC_PROFIT_DISTANCE)
+    profit_amount: float | None = Field(default=None, description=DESC_PROFIT_AMOUNT)
 
 
 class PreviewWorkingOrderRequest(BaseModel):
@@ -181,13 +209,47 @@ class PreviewWorkingOrderRequest(BaseModel):
     size: float = Field(..., gt=0, description="Order size")
     guaranteed_stop: bool = Field(default=False, description="Use guaranteed stop")
     trailing_stop: bool = Field(default=False, description="Use trailing stop")
-    stop_level: float | None = Field(default=None, description="Stop loss level")
-    stop_distance: float | None = Field(default=None, description="Stop loss distance")
-    stop_amount: float | None = Field(default=None, description="Stop loss amount")
-    profit_level: float | None = Field(default=None, description="Take profit level")
-    profit_distance: float | None = Field(default=None, description="Take profit distance")
-    profit_amount: float | None = Field(default=None, description="Take profit amount")
-    good_till_date: str | None = Field(default=None, description="Good till date (ISO 8601)")
+    stop_level: float | None = Field(default=None, description=DESC_STOP_LEVEL)
+    stop_distance: float | None = Field(default=None, description=DESC_STOP_DISTANCE)
+    stop_amount: float | None = Field(default=None, description=DESC_STOP_AMOUNT)
+    profit_level: float | None = Field(default=None, description=DESC_PROFIT_LEVEL)
+    profit_distance: float | None = Field(default=None, description=DESC_PROFIT_DISTANCE)
+    profit_amount: float | None = Field(default=None, description=DESC_PROFIT_AMOUNT)
+    good_till_date: str | None = Field(
+        default=None,
+        description="Good till date in ISO 8601 UTC (e.g. 2026-08-15T14:30:00)",
+    )
+
+    _validate_good_till_date = field_validator("good_till_date")(_validate_iso_good_till_date)
+
+
+class UpdateWorkingOrderRequest(BaseModel):
+    """Request to update a pending working order."""
+
+    deal_id: str = Field(..., description="Deal ID of the working order to update")
+    level: float | None = Field(default=None, gt=0, description="New order trigger level")
+    stop_level: float | None = Field(default=None, gt=0, description=DESC_STOP_LEVEL)
+    stop_distance: float | None = Field(default=None, gt=0, description=DESC_STOP_DISTANCE)
+    stop_amount: float | None = Field(default=None, gt=0, description=DESC_STOP_AMOUNT)
+    profit_level: float | None = Field(default=None, gt=0, description=DESC_PROFIT_LEVEL)
+    profit_distance: float | None = Field(default=None, gt=0, description=DESC_PROFIT_DISTANCE)
+    profit_amount: float | None = Field(default=None, gt=0, description=DESC_PROFIT_AMOUNT)
+    good_till_date: str | None = Field(
+        default=None,
+        description="Good till date in ISO 8601 UTC (e.g. 2026-08-15T14:30:00)",
+    )
+    time_in_force: TimeInForce | None = Field(
+        default=None,
+        description=(
+            "Time in force — GOOD_TILL_CANCELLED clears any expiry, "
+            "GOOD_TILL_DATE requires good_till_date. None preserves existing."
+        ),
+    )
+    # None means "carry forward existing value" — Capital.com resets omitted flags to false
+    guaranteed_stop: bool | None = Field(default=None, description="Guaranteed stop flag")
+    trailing_stop: bool | None = Field(default=None, description="Trailing stop flag")
+
+    _validate_good_till_date = field_validator("good_till_date")(_validate_iso_good_till_date)
 
 
 class RiskCheck(BaseModel):
